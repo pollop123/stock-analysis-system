@@ -149,6 +149,7 @@ export function StockDetailPage() {
     onSuccess: () => {
       toast.success("Added to watchlist");
       setShowAddMenu(false);
+      queryClient.invalidateQueries({ queryKey: ["watchlists"] });
     },
   });
 
@@ -203,7 +204,10 @@ export function StockDetailPage() {
 
     chart.timeScale().fitContent();
     chartRef.current = chart;
-    return () => chart.remove();
+    return () => {
+      chart.remove();
+      chartRef.current = null;
+    };
   }, [chartData]);
 
   const quote = quoteQuery.data;
