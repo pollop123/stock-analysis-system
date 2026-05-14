@@ -43,7 +43,7 @@ def _read_stock_sync_job(job: StockSyncJob) -> StockSyncJobRead:
 def list_stocks(
     q: Optional[str] = Query(None, min_length=1, description="Optional search query for stock name or symbol"),
     offset: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=500),
+    limit: int = Query(100, ge=1, le=3000),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
@@ -51,7 +51,9 @@ def list_stocks(
     query = db.query(Stock).filter(Stock.is_active == True)
     if q:
         query = query.filter((Stock.symbol.ilike(f"%{q}%")) | (Stock.name.ilike(f"%{q}%")))
-    stocks = query.offset(offset).limit(limit).all()
+    
+    # Sort by symbol by default for consistent ordering
+    stocks = query.order_by(Stock.symbol).offset(offset).limit(limit).all()
     return stocks
 
 

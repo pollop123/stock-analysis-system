@@ -15,12 +15,14 @@ function normalizePath(value: string) {
 
 function resolveApiBaseUrl() {
   const apiUrl = trimTrailingSlash(import.meta.env.VITE_API_URL || "");
+  let base = "";
   if (apiUrl) {
-    return apiUrl.endsWith(API_PREFIX) ? apiUrl : `${apiUrl}${API_PREFIX}`;
+    base = apiUrl.endsWith(API_PREFIX) ? apiUrl : `${apiUrl}${API_PREFIX}`;
+  } else {
+    const apiOrigin = trimTrailingSlash(import.meta.env.VITE_API_ORIGIN || "");
+    base = `${apiOrigin}${API_PREFIX}`;
   }
-
-  const apiOrigin = trimTrailingSlash(import.meta.env.VITE_API_ORIGIN || "");
-  return `${apiOrigin}${API_PREFIX}`;
+  return base.endsWith("/") ? base : `${base}/`;
 }
 
 export const apiClient = axios.create({
@@ -98,7 +100,7 @@ apiClient.interceptors.response.use(
       isRefreshing = true;
 
       try {
-        const res = await axios.post<TokenPair>(`${API_BASE_URL}/token-refreshes`, {
+        const res = await axios.post<TokenPair>(`${API_BASE_URL}token-refreshes`, {
           refresh_token: refreshToken,
         });
         setTokens(res.data);
