@@ -41,15 +41,22 @@ function App() {
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
+
+        {/* 公開路由 - 不需要登入 */}
+        <Route element={<Layout />}>
+          <Route path="/" element={<DashboardPage />} />
+          <Route path="/stocks" element={<StockSearchPage />} />
+          <Route path="/stocks/:symbol" element={<StockDetailPage />} />
+        </Route>
+
+        {/* 受保護的路由 - 需要登入 */}
         <Route element={<ProtectedRoute />}>
           <Route element={<Layout />}>
-            <Route path="/" element={<DashboardPage />} />
-            <Route path="/stocks" element={<StockSearchPage />} />
-            <Route path="/stocks/:symbol" element={<StockDetailPage />} />
             <Route path="/watchlists" element={<WatchlistsPage />} />
             <Route path="/watchlists/:id" element={<WatchlistDetailPage />} />
           </Route>
         </Route>
+
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Suspense>

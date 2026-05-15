@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
 import { Search, List, Sparkles, BrainCircuit, Activity, TrendingUp, TrendingDown, Settings2, ArrowRight } from "lucide-react";
 import { listWatchlists } from "@/api/watchlists";
+import { useAuthStore } from "@/stores/authStore";
 
 // Deterministic pseudo-random function for fast UI demonstration without hitting rate limits
 function getMockPriceData(symbol: string) {
@@ -11,17 +12,17 @@ function getMockPriceData(symbol: string) {
     hash = symbol.charCodeAt(i) + ((hash << 5) - hash);
   }
   const random = Math.abs(Math.sin(hash));
-  
+
   // Special case for TSMC
   const basePrice = symbol === "2330" ? 800 : (parseInt(symbol) % 500) + 10 || 50;
   const price = basePrice + random * 10;
-  
+
   const changePercent = parseFloat((Math.sin(hash + 1) * 5).toFixed(2));
   const change = parseFloat((price * (changePercent / 100)).toFixed(2));
-  
-  return { 
-    price: price.toFixed(2), 
-    changePercent, 
+
+  return {
+    price: price.toFixed(2),
+    changePercent,
     change: change > 0 ? `+${change}` : change.toString(),
     isUp: changePercent >= 0
   };
@@ -39,9 +40,12 @@ const MOCK_INDUSTRIES = [
 ];
 
 export function DashboardPage() {
+  const { isAuthenticated } = useAuthStore();
+
   const { data: watchlists, isLoading } = useQuery({
     queryKey: ["watchlists"],
     queryFn: listWatchlists,
+    enabled: isAuthenticated,
   });
 
   const [primaryWlId, setPrimaryWlId] = useState<string | null>(() => {
@@ -85,7 +89,7 @@ export function DashboardPage() {
       <p className="text-muted-foreground mb-8 max-w-md mx-auto">
         搜尋超過 2300 檔上市櫃股票、ETF，掌握即時價格與技術指標，建立您的專屬觀察清單。
       </p>
-      
+
       <form onSubmit={handleSearchSubmit} className="w-full max-w-lg relative group">
         <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
           <Search className="h-5 w-5 text-muted-foreground group-focus-within:text-accent transition-colors" />
@@ -128,7 +132,7 @@ export function DashboardPage() {
               </div>
               <h2 className="text-lg font-bold text-primary">Main Watchlist</h2>
             </div>
-            
+
             {watchlists && watchlists.length > 0 && (
               <div className="flex items-center gap-2">
                 <Settings2 className="w-4 h-4 text-muted-foreground" />
@@ -172,7 +176,7 @@ export function DashboardPage() {
                         {data.isUp ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />}
                       </div>
                     </div>
-                    
+
                     <div className="flex items-end justify-between">
                       <div>
                         <p className="text-2xl font-bold text-primary">{data.price}</p>
@@ -199,7 +203,7 @@ export function DashboardPage() {
             <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
               <BrainCircuit className="w-40 h-40 text-indigo-500" />
             </div>
-            
+
             <div className="relative z-10 flex-1 flex flex-col">
               <div className="flex items-center gap-2 mb-6">
                 <div className="p-1.5 bg-indigo-500 rounded-lg shadow-sm">
@@ -207,7 +211,7 @@ export function DashboardPage() {
                 </div>
                 <h2 className="text-lg font-bold text-indigo-950">AI 交易洞察</h2>
               </div>
-              
+
               <div className="space-y-4 flex-1">
                 <div className="bg-white/60 backdrop-blur-sm rounded-xl p-4 border border-white shadow-sm">
                   <h3 className="text-xs font-bold text-indigo-800 uppercase tracking-wider mb-2 flex items-center gap-1">
@@ -231,7 +235,7 @@ export function DashboardPage() {
               </div>
 
               <div className="pt-6 mt-auto text-right flex justify-between items-center">
-                 <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">
+                <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">
                   Updated just now
                 </span>
                 <span className="inline-flex items-center gap-1 text-[10px] font-bold text-indigo-400 uppercase tracking-widest bg-white/50 px-2 py-1 rounded-md border border-indigo-100">
@@ -267,7 +271,7 @@ export function DashboardPage() {
               // Calculate color intensity based on change magnitude
               const absChange = Math.abs(ind.change);
               let bgColor = "bg-muted"; // Neutral
-              
+
               if (isUp) {
                 if (absChange > 2) bgColor = "bg-red-600";
                 else if (absChange > 1) bgColor = "bg-red-500/80";
@@ -279,7 +283,7 @@ export function DashboardPage() {
               }
 
               return (
-                <div 
+                <div
                   key={ind.name}
                   className={`${ind.colSpan} ${ind.rowSpan} ${bgColor} rounded-xl p-3 md:p-4 text-white shadow-sm flex flex-col justify-between hover:brightness-110 hover:scale-[1.01] transition-all cursor-pointer ring-1 ring-white/10`}
                 >
