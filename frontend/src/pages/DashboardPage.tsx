@@ -131,6 +131,11 @@ export function DashboardPage() {
                 <List className="w-5 h-5 text-accent" />
               </div>
               <h2 className="text-lg font-bold text-primary">Main Watchlist</h2>
+              {!isAuthenticated && (
+                <span className="text-xs font-medium text-muted-foreground ml-1">
+                  （登入後即可使用）
+                </span>
+              )}
             </div>
 
             {watchlists && watchlists.length > 0 && (
