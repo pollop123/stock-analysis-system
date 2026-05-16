@@ -28,6 +28,15 @@ export interface RefreshRequest {
   refresh_token: string;
 }
 
+export interface PasswordResetRequest {
+  email: string;
+}
+
+export interface PasswordResetConfirmRequest {
+  token: string;
+  new_password: string;
+}
+
 export interface Stock {
   id: number;
   symbol: string;

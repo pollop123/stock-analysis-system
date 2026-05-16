@@ -1,6 +1,8 @@
 import { apiClient } from "./client";
 import type {
   LoginRequest,
+  PasswordResetConfirmRequest,
+  PasswordResetRequest,
   RegisterRequest,
   TokenPair,
   User,
@@ -14,6 +16,14 @@ export async function login(data: LoginRequest): Promise<TokenPair> {
 export async function register(data: RegisterRequest): Promise<User> {
   const res = await apiClient.post<User>("users", data);
   return res.data;
+}
+
+export async function requestPasswordReset(data: PasswordResetRequest): Promise<void> {
+  await apiClient.post("password-reset-requests", data);
+}
+
+export async function resetPassword(data: PasswordResetConfirmRequest): Promise<void> {
+  await apiClient.post("password-resets", data);
 }
 
 export async function logout(token: string): Promise<void> {

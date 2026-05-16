@@ -40,9 +40,9 @@ export function Navbar() {
   return (
     <div className="sticky top-0 z-50 w-full">
       {/* 頂部投資警語 */}
-      <div className="bg-amber-50 dark:bg-amber-950/20 border-b border-amber-100 dark:border-amber-950/40 py-1.5 px-4 text-center">
-        <p className="text-xs text-amber-700 dark:text-amber-400 flex items-center justify-center gap-1 font-medium leading-none">
-          <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+      <div className="bg-card border-b border-border py-1.5 px-4 text-center">
+        <p className="text-xs text-muted-foreground flex items-center justify-center gap-1.5 font-medium leading-none">
+          <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 text-accent" />
           <span>本網站內容僅供參考，不構成任何投資建議。投資人應審慎評估並自負風險。</span>
         </p>
       </div>
