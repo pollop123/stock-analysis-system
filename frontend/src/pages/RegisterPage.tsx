@@ -21,7 +21,7 @@ export function RegisterPage() {
     if (!/[A-Z]/.test(password)) e.password = "Password must contain an uppercase letter";
     if (!/[a-z]/.test(password)) e.password = "Password must contain a lowercase letter";
     if (!/[0-9]/.test(password)) e.password = "Password must contain a digit";
-    if (!/[!@#$%^&*(),.?":{}|<>_\-+=\[\]~/`\\'\\;]/.test(password))
+    if (!/[!@#$%^&*(),.?":{}|<>_\-+=[\]~/`\\'\\;]/.test(password))
       e.password = "Password must contain a special character";
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -35,8 +35,8 @@ export function RegisterPage() {
       await register({ username, email, password });
       toast.success("Account created! Please sign in.");
       navigate("/login");
-    } catch (err: any) {
-      const msg = err.response?.data?.detail || "Registration failed";
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { detail?: string } } }).response?.data?.detail || "Registration failed";
       toast.error(msg);
     } finally {
       setIsSubmitting(false);

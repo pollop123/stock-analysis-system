@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
 import { Search, List, Sparkles, BrainCircuit, Activity, TrendingUp, TrendingDown, Settings2, ArrowRight } from "lucide-react";
@@ -52,15 +52,6 @@ export function DashboardPage() {
     return localStorage.getItem("primaryWatchlistId");
   });
 
-  // Auto-select the first watchlist if none is selected
-  useEffect(() => {
-    if (watchlists && watchlists.length > 0 && !primaryWlId) {
-      const firstId = watchlists[0].id.toString();
-      setPrimaryWlId(firstId);
-      localStorage.setItem("primaryWatchlistId", firstId);
-    }
-  }, [watchlists, primaryWlId]);
-
   // Handle manual selection change
   const handleWatchlistChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newId = e.target.value;
@@ -79,37 +70,6 @@ export function DashboardPage() {
       navigate('/stocks', { state: { initialQuery: searchTerm } });
     }
   };
-
-  const EmptyStateSearch = () => (
-    <div className="bg-card border border-border rounded-3xl p-12 lg:p-24 text-center flex flex-col items-center justify-center shadow-sm">
-      <div className="w-16 h-16 bg-blue-50 text-accent rounded-full flex items-center justify-center mb-6">
-        <Search className="w-8 h-8" />
-      </div>
-      <h2 className="text-2xl md:text-3xl font-black text-primary mb-3">探索台股，從這裡開始</h2>
-      <p className="text-muted-foreground mb-8 max-w-md mx-auto">
-        搜尋超過 2300 檔上市櫃股票、ETF，掌握即時價格與技術指標，建立您的專屬觀察清單。
-      </p>
-
-      <form onSubmit={handleSearchSubmit} className="w-full max-w-lg relative group">
-        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-          <Search className="h-5 w-5 text-muted-foreground group-focus-within:text-accent transition-colors" />
-        </div>
-        <input
-          type="text"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          placeholder="輸入股票代碼或名稱 (例如: 2330, 0050)"
-          className="block w-full pl-12 pr-24 py-4 bg-muted/50 border-2 border-border rounded-2xl text-lg font-medium text-primary placeholder:text-muted-foreground/70 focus:outline-none focus:bg-card focus:border-accent focus:ring-4 focus:ring-accent/10 transition-all"
-        />
-        <button
-          type="submit"
-          className="absolute inset-y-2 right-2 px-4 bg-accent text-accent-foreground rounded-xl font-bold hover:shadow-lg hover:bg-blue-600 transition-all active:scale-95 flex items-center gap-1"
-        >
-          搜尋 <ArrowRight className="w-4 h-4 hidden sm:block" />
-        </button>
-      </form>
-    </div>
-  );
 
   return (
     <div className="space-y-8">
@@ -159,7 +119,34 @@ export function DashboardPage() {
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-accent" />
             </div>
           ) : !activeWatchlist || activeWatchlist.items.length === 0 ? (
-            <EmptyStateSearch />
+            <div className="bg-card border border-border rounded-3xl p-12 lg:p-24 text-center flex flex-col items-center justify-center shadow-sm">
+              <div className="w-16 h-16 bg-blue-50 text-accent rounded-full flex items-center justify-center mb-6">
+                <Search className="w-8 h-8" />
+              </div>
+              <h2 className="text-2xl md:text-3xl font-black text-primary mb-3">探索台股，從這裡開始</h2>
+              <p className="text-muted-foreground mb-8 max-w-md mx-auto">
+                搜尋超過 2300 檔上市櫃股票、ETF，掌握即時價格與技術指標，建立您的專屬觀察清單。
+              </p>
+              
+              <form onSubmit={handleSearchSubmit} className="w-full max-w-lg relative group">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                  <Search className="h-5 w-5 text-muted-foreground group-focus-within:text-accent transition-colors" />
+                </div>
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="輸入股票代碼或名稱 (例如: 2330, 0050)"
+                  className="block w-full pl-12 pr-24 py-4 bg-muted/50 border-2 border-border rounded-2xl text-lg font-medium text-primary placeholder:text-muted-foreground/70 focus:outline-none focus:bg-card focus:border-accent focus:ring-4 focus:ring-accent/10 transition-all"
+                />
+                <button
+                  type="submit"
+                  className="absolute inset-y-2 right-2 px-4 bg-accent text-accent-foreground rounded-xl font-bold hover:shadow-lg hover:bg-blue-600 transition-all active:scale-95 flex items-center gap-1"
+                >
+                  搜尋 <ArrowRight className="w-4 h-4 hidden sm:block" />
+                </button>
+              </form>
+            </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
               {activeWatchlist.items.map((stock) => {
@@ -275,7 +262,7 @@ export function DashboardPage() {
               const isUp = ind.change >= 0;
               // Calculate color intensity based on change magnitude
               const absChange = Math.abs(ind.change);
-              let bgColor = "bg-muted"; // Neutral
+              let bgColor: string;
 
               if (isUp) {
                 if (absChange > 2) bgColor = "bg-red-600";

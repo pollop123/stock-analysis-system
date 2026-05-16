@@ -25,8 +25,8 @@ export function LoginPage() {
       setAuth(user, tokens);
       toast.success("Welcome back!");
       navigate("/");
-    } catch (err: any) {
-      const msg = err.response?.data?.detail || "Login failed";
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { detail?: string } } }).response?.data?.detail || "Login failed";
       toast.error(msg);
     } finally {
       setIsSubmitting(false);

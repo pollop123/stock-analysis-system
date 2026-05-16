@@ -54,8 +54,8 @@ export function WatchlistDetailPage() {
       queryClient.invalidateQueries({ queryKey: ["watchlist-quotes", watchlistId] });
       queryClient.invalidateQueries({ queryKey: ["watchlists"] });
     },
-    onError: (err: any) => {
-      toast.error(err.response?.data?.detail || "Failed to remove");
+    onError: (err: unknown) => {
+      toast.error((err as { response?: { data?: { detail?: string } } }).response?.data?.detail || "Failed to remove");
     },
   });
 
@@ -69,8 +69,8 @@ export function WatchlistDetailPage() {
       queryClient.invalidateQueries({ queryKey: ["watchlist-quotes", watchlistId] });
       queryClient.invalidateQueries({ queryKey: ["watchlists"] });
     },
-    onError: (err: any) => {
-      toast.error(err.response?.data?.detail || "Failed to add");
+    onError: (err: unknown) => {
+      toast.error((err as { response?: { data?: { detail?: string } } }).response?.data?.detail || "Failed to add");
     },
   });
 

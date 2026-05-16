@@ -40,10 +40,17 @@ export function StockSearchPage() {
   const [visibleCount, setVisibleCount] = useState(BATCH_SIZE);
   const sentinelRef = useRef<HTMLDivElement>(null);
 
-  // Reset visible count when filters change
-  useEffect(() => {
+  // React recommended pattern: Reset visible count when filters change during render
+  const [prevFilters, setPrevFilters] = useState([query, selectedIndustry, assetType, performance]);
+  if (
+    query !== prevFilters[0] ||
+    selectedIndustry !== prevFilters[1] ||
+    assetType !== prevFilters[2] ||
+    performance !== prevFilters[3]
+  ) {
+    setPrevFilters([query, selectedIndustry, assetType, performance]);
     setVisibleCount(BATCH_SIZE);
-  }, [query, selectedIndustry, assetType, performance]);
+  }
 
   // 1. Search Query (Global Search across all data)
   const searchQuery = useQuery({
@@ -226,7 +233,7 @@ export function StockSearchPage() {
       {!isLoading && visibleResults && visibleResults.length > 0 && (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {visibleResults.map((stock: any) => (
+            {visibleResults.map((stock: typeof filteredResults[0]) => (
               <Link
                 key={stock.symbol}
                 to={`/stocks/${stock.symbol}`}

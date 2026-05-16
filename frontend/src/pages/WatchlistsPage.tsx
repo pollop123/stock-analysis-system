@@ -23,8 +23,8 @@ export function WatchlistsPage() {
       setIsCreating(false);
       queryClient.invalidateQueries({ queryKey: ["watchlists"] });
     },
-    onError: (err: any) => {
-      toast.error(err.response?.data?.detail || "Failed to create");
+    onError: (err: unknown) => {
+      toast.error((err as { response?: { data?: { detail?: string } } }).response?.data?.detail || "Failed to create");
     },
   });
 
@@ -34,8 +34,8 @@ export function WatchlistsPage() {
       toast.success("Watchlist deleted");
       queryClient.invalidateQueries({ queryKey: ["watchlists"] });
     },
-    onError: (err: any) => {
-      toast.error(err.response?.data?.detail || "Failed to delete");
+    onError: (err: unknown) => {
+      toast.error((err as { response?: { data?: { detail?: string } } }).response?.data?.detail || "Failed to delete");
     },
   });
 

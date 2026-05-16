@@ -15,7 +15,7 @@ function normalizePath(value: string) {
 
 function resolveApiBaseUrl() {
   const apiUrl = trimTrailingSlash(import.meta.env.VITE_API_URL || "");
-  let base = "";
+  let base: string;
   if (apiUrl) {
     base = apiUrl.endsWith(API_PREFIX) ? apiUrl : `${apiUrl}${API_PREFIX}`;
   } else {
