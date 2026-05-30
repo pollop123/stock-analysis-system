@@ -26,6 +26,8 @@ export function StockHeader({
   };
 
   const isETF = symbol.startsWith("00") || symbol.length >= 5;
+  const marketLabel =
+    stock?.market === "TWSE" ? "上市" : stock?.market === "TPEx" ? "上櫃" : "—";
 
   const suffix = symbol.length > 2 ? symbol.slice(-2) : symbol;
 
@@ -63,7 +65,7 @@ export function StockHeader({
                 variant="secondary"
                 className="text-xs bg-slate-100 text-slate-600"
               >
-                {stock?.market === "TWSE" ? "台股" : "櫃買"}
+                {marketLabel}
               </Badge>
               {recommendation && (
                 <Badge variant={recVariant} className="text-xs uppercase">
@@ -83,7 +85,7 @@ export function StockHeader({
             <div className="flex items-center gap-4 mt-2 flex-wrap">
               <div className="flex items-center gap-1.5">
                 <span className="text-xs text-muted-foreground">
-                  {stock?.market || "—"}
+                  {marketLabel}
                 </span>
               </div>
             </div>

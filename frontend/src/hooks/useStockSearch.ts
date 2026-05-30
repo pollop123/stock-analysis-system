@@ -17,11 +17,7 @@ function useDebounce<T>(value: T, delay: number): T {
 }
 
 function isEtf(stock: { symbol: string; is_etf?: boolean | null }) {
-  if (stock.is_etf !== undefined && stock.is_etf !== null) {
-    return stock.is_etf;
-  }
-  // Fallback heuristic for stocks not yet refreshed
-  return stock.symbol.startsWith("00") || stock.symbol.length >= 5;
+  return stock.is_etf === true || stock.symbol.startsWith("00") || stock.symbol.length >= 5;
 }
 
 export function useStockSearch() {

@@ -9,9 +9,7 @@ import {
   syncStockPrices,
   exportStockHistoryCSV,
   getStock,
-  getStockPeers,
   getStockProfile,
-  getTargetPrices,
   getStockFundamentals,
 } from "@/api/stocks";
 import { createAlert } from "@/api/alerts";
@@ -25,23 +23,12 @@ import type { StockPrice } from "@/types";
 import { toast } from "sonner";
 
 import { StockHeader } from "@/components/stock/StockHeader";
-import { RecBanner } from "@/components/stock/RecBanner";
 import { MetricsStrip } from "@/components/stock/MetricsStrip";
 import { PriceChart } from "@/components/stock/PriceChart";
-import { TechnicalIndicators } from "@/components/stock/TechnicalIndicators";
-import { AnalysisPoints } from "@/components/stock/AnalysisPoints";
 import { QuickActions } from "@/components/stock/QuickActions";
 import { BuySellModal } from "@/components/stock/BuySellModal";
-import { SignalSummary } from "@/components/stock/SignalSummary";
-import { RiskAssessment } from "@/components/stock/RiskAssessment";
-import { SupportResistance } from "@/components/stock/SupportResistance";
-import { PeerComparison } from "@/components/stock/PeerComparison";
 import { FooterDisclaimer } from "@/components/stock/FooterDisclaimer";
-import { QuickStatsGrid } from "@/components/stock/QuickStatsGrid";
-import { KeyMetricsGrid } from "@/components/stock/KeyMetricsGrid";
-import { AnalystConsensus } from "@/components/stock/AnalystConsensus";
-import { RelatedStocks } from "@/components/stock/RelatedStocks";
-import { FinancialHealthScores } from "@/components/stock/FinancialHealthScores";
+import { StockInsightCards } from "@/components/stock/StockInsightCards";
 
 import {
   RefreshCw,
@@ -61,36 +48,6 @@ import { Input } from "@/components/ui/Input";
 function aggregatePrices(prices: StockPrice[], resolution: "day" | "week" | "year"): StockPrice[] {
   if (resolution === "day") return prices;
   return prices;
-}
-
-function buildAnalysisPoints(reasons: string[]): {
-  text: string;
-  detail: string;
-  type: "bullish" | "bearish" | "neutral" | "caution";
-}[] {
-  return reasons.map((r) => {
-    const lower = r.toLowerCase();
-    const isBullish =
-      lower.includes("above") ||
-      lower.includes("rose") ||
-      lower.includes("healthy") ||
-      lower.includes("buy") ||
-      lower.includes("positive") ||
-      lower.includes("oversold");
-    const isBearish =
-      lower.includes("below") ||
-      lower.includes("fell") ||
-      lower.includes("weak") ||
-      lower.includes("overbought") ||
-      lower.includes("sell");
-    const isCaution =
-      lower.includes("neutral") || lower.includes("does not") || lower.includes("cautious");
-    return {
-      text: r,
-      detail: r,
-      type: isBullish ? "bullish" : isBearish ? "bearish" : isCaution ? "caution" : "neutral",
-    };
-  });
 }
 
 function formatDuration(ms: number): string {
@@ -136,12 +93,6 @@ export function StockDetailPage() {
     enabled: !!symbol,
   });
 
-  const peersQuery = useQuery({
-    queryKey: ["stock-peers", symbol],
-    queryFn: () => getStockPeers(symbol!),
-    enabled: !!symbol,
-  });
-
   const profileQuery = useQuery({
     queryKey: ["stock-profile", symbol],
     queryFn: () => getStockProfile(symbol!),
@@ -176,12 +127,6 @@ export function StockDetailPage() {
   const recommendationQuery = useQuery({
     queryKey: ["stock-recommendation", symbol],
     queryFn: () => getStockRecommendation(symbol!),
-    enabled: !!symbol,
-  });
-
-  const targetPricesQuery = useQuery({
-    queryKey: ["target-prices", symbol],
-    queryFn: () => getTargetPrices(symbol!),
     enabled: !!symbol,
   });
 
@@ -276,33 +221,7 @@ export function StockDetailPage() {
     return aggregatePrices(historyQuery.data, "day");
   }, [historyQuery.data]);
 
-  const analysisPoints = useMemo(() => {
-    if (!recommendationQuery.data?.reasons) return [];
-    return buildAnalysisPoints(recommendationQuery.data.reasons);
-  }, [recommendationQuery.data]);
-
-  const volumeAnalysis = useMemo(() => {
-    const rec = recommendationQuery.data;
-    if (!rec) return undefined;
-    return {
-      volume: quote?.volume,
-      avgVolume20d: rec.indicators.avg_volume_20d ?? undefined,
-      volumeRatio: rec.indicators.volume_ratio ?? undefined,
-    };
-  }, [recommendationQuery.data, quote]);
-
   const profile = profileQuery.data;
-
-  const peerStocks = useMemo(() => {
-    const peers = peersQuery.data || [];
-    return peers.map((s) => ({
-      symbol: s.symbol,
-      name: s.name,
-      price: "—",
-      changePercent: "0",
-      recommendation: "hold" as "buy" | "hold" | "sell",
-    }));
-  }, [peersQuery.data]);
 
   /* -- Handlers -- */
   const handleShare = async () => {
@@ -335,16 +254,6 @@ export function StockDetailPage() {
   /* -- Render -- */
   return (
     <div className="space-y-0">
-      {/* Recommendation Banner */}
-      {isVisible("recommendation_banner") && rec && (
-        <RecBanner
-          recommendation={rec}
-          targetPrice={rec.support_resistance?.target_price ?? undefined}
-          potentialReturn={rec.support_resistance?.potential_return ?? undefined}
-          stopLoss={rec.support_resistance?.stop_loss ?? undefined}
-        />
-      )}
-
       {/* Metrics Strip */}
       {isVisible("metrics_strip") && (
         <MetricsStrip
@@ -370,6 +279,13 @@ export function StockDetailPage() {
                 onShare={handleShare}
               />
             )}
+
+            <StockInsightCards
+              stock={stockQuery.data || null}
+              recommendation={rec || null}
+              fundamentals={fundamentalsQuery.data || null}
+              quote={quote || null}
+            />
 
             {/* Alert Form */}
             {isVisible("alert_form") && showAlertForm && (
@@ -414,61 +330,6 @@ export function StockDetailPage() {
             {/* Price Chart */}
             {isVisible("price_chart") && (
               <PriceChart data={chartData} isLoading={historyQuery.isLoading} isDark={isDark} />
-            )}
-
-            {/* Technical Indicators */}
-            {isVisible("technical_indicators") && (
-              <TechnicalIndicators
-                recommendation={rec || undefined}
-                volumeAnalysis={volumeAnalysis}
-              />
-            )}
-
-            {/* Analysis Points */}
-            {isVisible("analysis_points") && (
-              <AnalysisPoints
-                points={analysisPoints}
-                updatedAt={
-                  rec?.as_of
-                    ? new Date(rec.as_of).toLocaleDateString("zh-TW") + " 15:30"
-                    : undefined
-                }
-              />
-            )}
-
-            {/* Quick Stats Grid */}
-            {isVisible("quick_stats_grid") && (
-              <QuickStatsGrid
-                fundamentals={fundamentalsQuery.data || null}
-                currentPrice={quote?.price}
-              />
-            )}
-
-            {/* Key Metrics Grid */}
-            {isVisible("key_metrics_grid") && (
-              <KeyMetricsGrid fundamentals={fundamentalsQuery.data || null} />
-            )}
-
-            {/* Analyst Consensus */}
-            {isVisible("analyst_consensus") && (
-              <AnalystConsensus
-                targetPrices={targetPricesQuery.data || []}
-                currentPrice={quote?.price}
-              />
-            )}
-
-            {/* Related Stocks */}
-            {isVisible("related_stocks") && (
-              <RelatedStocks symbol={symbol || ""} />
-            )}
-
-            {/* Financial Health Scores */}
-            {isVisible("financial_health_scores") && (
-              <FinancialHealthScores
-                fundamentals={fundamentalsQuery.data || null}
-                recommendation={rec || null}
-                currentPrice={quote?.price}
-              />
             )}
           </div>
 
@@ -522,29 +383,6 @@ export function StockDetailPage() {
                   )}
                 </CardContent>
               </Card>
-            )}
-
-            {/* Signal Summary */}
-            {isVisible("signal_summary") && (
-              <SignalSummary recommendation={rec || undefined} />
-            )}
-
-            {/* Risk Assessment */}
-            {isVisible("risk_assessment") && (
-              <RiskAssessment riskMetrics={rec?.risk_metrics} />
-            )}
-
-            {/* Support / Resistance */}
-            {isVisible("support_resistance") && (
-              <SupportResistance
-                levels={rec?.support_resistance}
-                currentPrice={quote?.price}
-              />
-            )}
-
-            {/* Peer Comparison */}
-            {isVisible("peer_comparison") && (
-              <PeerComparison peers={peerStocks} currentSymbol={symbol || ""} />
             )}
 
             {/* Sync + CSV Actions */}
