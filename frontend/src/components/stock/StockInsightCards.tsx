@@ -12,6 +12,16 @@ import {
 import { Badge } from "@/components/ui/Badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { getResolvedAIAnalysis, isActiveAIAnalysisJob } from "@/lib/aiAnalysis";
+import { formatPercent } from "@/lib/format";
+import {
+  aiActionLabel,
+  aiTone,
+  countSignals,
+  fundamentalHealth,
+  isEtf,
+  recommendationTone,
+  type Tone,
+} from "@/lib/signals";
 import type {
   AIAnalysisResult,
   Stock,
@@ -20,7 +30,6 @@ import type {
   StockRecommendation,
 } from "@/types";
 
-type Tone = "positive" | "neutral" | "caution";
 type Verdict = "buy" | "hold" | "avoid";
 
 interface StockInsightCardsProps {
@@ -32,13 +41,6 @@ interface StockInsightCardsProps {
   aiAnalysis?: AIAnalysisResult | null;
   aiIsLoading?: boolean;
   isAuthenticated?: boolean;
-}
-
-function formatPercent(value?: string | null, multiplier = 1) {
-  if (!value) return null;
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric)) return null;
-  return `${(numeric * multiplier).toFixed(2)}%`;
 }
 
 function toneClasses(tone: Tone) {
@@ -81,27 +83,8 @@ function aiVerdict(action?: -1 | 0 | 1): Verdict {
   return "hold";
 }
 
-function aiTone(action: -1 | 0 | 1): Tone {
-  if (action > 0) return "positive";
-  if (action < 0) return "caution";
-  return "neutral";
-}
-
-function aiActionLabel(action: -1 | 0 | 1) {
-  if (action > 0) return "AI 偏多";
-  if (action < 0) return "AI 偏空";
-  return "AI 中性";
-}
-
-function isEtfStock(stock?: Stock | null) {
-  if (!stock) return false;
-  return stock.is_etf === true || stock.symbol.startsWith("00") || stock.symbol.length >= 5;
-}
-
 function getToneFromRecommendation(recommendation?: StockRecommendation | null): Tone {
-  if (recommendation?.recommendation === "buy") return "positive";
-  if (recommendation?.recommendation === "sell") return "caution";
-  return "neutral";
+  return recommendationTone(recommendation?.recommendation);
 }
 
 function getVerdictFromRecommendation(recommendation?: StockRecommendation | null): Verdict {
@@ -225,15 +208,8 @@ function getTechnicalInsight(recommendation?: StockRecommendation | null) {
     };
   }
 
-  const signals = Object.values(recommendation.indicator_signals || {});
-  const buySignals = signals.filter((signal) => signal === "buy").length;
-  const sellSignals = signals.filter((signal) => signal === "sell").length;
-  const tone: Tone =
-    recommendation.recommendation === "buy"
-      ? "positive"
-      : recommendation.recommendation === "sell"
-        ? "caution"
-        : "neutral";
+  const { buy: buySignals, sell: sellSignals } = countSignals(recommendation.indicator_signals);
+  const tone = recommendationTone(recommendation.recommendation);
 
   return {
     tone,
@@ -261,20 +237,7 @@ function getFundamentalInsight(fundamentals?: StockFundamental | null) {
     };
   }
 
-  const pe = fundamentals.pe_ratio ? Number(fundamentals.pe_ratio) : null;
-  const revenueGrowth = fundamentals.revenue_growth
-    ? Number(fundamentals.revenue_growth)
-    : null;
-  const margin = fundamentals.profit_margins ? Number(fundamentals.profit_margins) : null;
-  const roe = fundamentals.return_on_equity ? Number(fundamentals.return_on_equity) : null;
-  const healthySignals = [
-    revenueGrowth !== null && revenueGrowth > 0,
-    margin !== null && margin > 0.1,
-    roe !== null && roe > 0.1,
-    pe !== null && pe > 0 && pe < 25,
-  ].filter(Boolean).length;
-
-  const tone: Tone = healthySignals >= 3 ? "positive" : healthySignals <= 1 ? "caution" : "neutral";
+  const tone = fundamentalHealth(fundamentals)?.tone ?? "neutral";
 
   return {
     tone,
@@ -286,8 +249,8 @@ function getFundamentalInsight(fundamentals?: StockFundamental | null) {
           ? "基本面支持度不足，投資判斷不宜只看短線價格。"
           : "基本面訊號沒有明顯單邊結論，適合搭配產業與價格趨勢一起看。",
     points: [
-      `本益比 ${fundamentals.pe_ratio ?? "—"}，營收成長 ${formatPercent(fundamentals.revenue_growth, 100) ?? "—"}。`,
-      `利潤率 ${formatPercent(fundamentals.profit_margins, 100) ?? "—"}，ROE ${formatPercent(fundamentals.return_on_equity, 100) ?? "—"}。`,
+      `本益比 ${fundamentals.pe_ratio ?? "—"}，營收成長 ${formatPercent(fundamentals.revenue_growth, { multiplier: 100 })}。`,
+      `利潤率 ${formatPercent(fundamentals.profit_margins, { multiplier: 100 })}，ROE ${formatPercent(fundamentals.return_on_equity, { multiplier: 100 })}。`,
     ],
   };
 }
@@ -319,12 +282,7 @@ function getInvestmentInsight(
     };
   }
 
-  const tone: Tone =
-    recommendation.recommendation === "buy"
-      ? "positive"
-      : recommendation.recommendation === "sell"
-        ? "caution"
-        : "neutral";
+  const tone = recommendationTone(recommendation.recommendation);
   const currentPrice = quote?.price ?? recommendation.indicators.close;
   const target = recommendation.support_resistance?.target_price;
   const stop = recommendation.support_resistance?.stop_loss;
@@ -355,7 +313,7 @@ export function StockInsightCards({
   aiIsLoading,
   isAuthenticated = false,
 }: StockInsightCardsProps) {
-  const isETF = isEtfStock(stock);
+  const isETF = stock ? isEtf(stock.symbol, stock) : false;
   const fundamentalTitle = isETF ? "ETF 摘要" : "基本面";
 
   // Resolve PR #17 AI analysis result (handles both direct response and async job).

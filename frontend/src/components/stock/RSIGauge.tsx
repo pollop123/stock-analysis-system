@@ -1,31 +1,34 @@
+import { toNumber } from "@/lib/format";
+import { rsiBand } from "@/lib/signals";
 import type { RSIGaugeProps } from "@/types/stock";
 
 export function RSIGauge({ value }: RSIGaugeProps) {
-  const num = value ? parseFloat(value) : 50;
+  const num = toNumber(value) ?? 50;
   const clamped = Math.max(0, Math.min(100, num));
+  const { zone, label } = rsiBand(value);
 
-  const getLabel = (v: number) => {
-    if (v > 70) return "超買";
-    if (v < 30) return "超賣";
-    if (v >= 45 && v <= 55) return "中性";
-    if (v > 55) return "中性偏多";
-    return "中性偏空";
-  };
+  const badgeClass =
+    zone === "overbought"
+      ? "bg-red-50 text-danger"
+      : zone === "oversold"
+        ? "bg-green-50 text-success"
+        : "bg-emerald-50 text-emerald-600";
+
+  const note =
+    zone === "overbought"
+      ? "，短期過熱需留意回調風險。"
+      : zone === "oversold"
+        ? "，具備反彈潛力，可關注買入機會。"
+        : "，動能平穩，適合觀察趨勢延續性。";
 
   return (
     <div>
       <div className="flex items-center justify-between mb-3">
         <span className="text-sm font-semibold text-primary">RSI (14)</span>
         <span
-          className={`px-2 py-0.5 text-xs font-semibold rounded-full ${
-            num > 70
-              ? "bg-red-50 text-danger"
-              : num < 30
-                ? "bg-green-50 text-success"
-                : "bg-emerald-50 text-emerald-600"
-          }`}
+          className={`px-2 py-0.5 text-xs font-semibold rounded-full ${badgeClass}`}
         >
-          {value ?? "—"} — {getLabel(num)}
+          {value ?? "—"} — {label}
         </span>
       </div>
 
@@ -49,12 +52,8 @@ export function RSIGauge({ value }: RSIGaugeProps) {
 
       <div className="mt-3 pt-3 border-t border-border">
         <p className="text-xs text-muted-foreground leading-relaxed">
-          RSI {getLabel(num)}
-          {num > 70
-            ? "，短期過熱需留意回調風險。"
-            : num < 30
-              ? "，具備反彈潛力，可關注買入機會。"
-              : "，動能平穩，適合觀察趨勢延續性。"}
+          RSI {label}
+          {note}
         </p>
       </div>
     </div>

@@ -8,6 +8,28 @@ import pytest
 from fastapi import status
 
 from app.models import Stock, StockFundamental, StockPrice, StockSyncJob
+from app.services.market_data import InMemoryMarketData, PriceRow
+from app.services.stock_data import set_market_data_source
+
+
+def _quote(symbol="2330", name="台積電", **overrides):
+    """Build a normalized quote dict (the market data seam's contract)."""
+    base = dict(
+        symbol=symbol,
+        name=name,
+        price=Decimal("850.00"),
+        open=Decimal("845.00"),
+        high=Decimal("855.00"),
+        low=Decimal("840.00"),
+        close=Decimal("850.00"),
+        volume=50000,
+        change=Decimal("10.00"),
+        change_percent=Decimal("1.19"),
+        last_updated=datetime.now(timezone.utc),
+    )
+    base.update(overrides)
+    return base
+
 
 # ─── Public Stock Reads ───────────────────────────────────
 
@@ -20,19 +42,8 @@ class TestStocksPublicReads:
         response = client.get("/api/v1/stocks")
         assert response.status_code == status.HTTP_200_OK
 
-    @patch("app.services.stock_data.twstock.realtime.get")
-    def test_quote_is_public(self, mock_get, client, sample_stocks):
-        mock_get.return_value = {
-            "success": True,
-            "info": {"code": "2330", "name": "台積電"},
-            "realtime": {
-                "latest_trade_price": "850.00",
-                "open": "845.00",
-                "high": "855.00",
-                "low": "840.00",
-                "accumulate_trade_volume": "50000",
-            },
-        }
+    def test_quote_is_public(self, client, sample_stocks):
+        set_market_data_source(InMemoryMarketData(quotes={"2330": _quote()}))
         response = client.get("/api/v1/stocks/2330/quotes/latest")
         assert response.status_code == status.HTTP_200_OK
 
@@ -190,21 +201,8 @@ class TestGetStock:
 # ─── Quote ────────────────────────────────────────────────
 
 class TestStockQuote:
-    @patch("app.services.stock_data.twstock.realtime.get")
-    def test_get_quote_success(self, mock_get, auth_client, sample_stocks):
-        mock_get.return_value = {
-            "success": True,
-            "info": {"code": "2330", "name": "台積電"},
-            "realtime": {
-                "latest_trade_price": "850.00",
-                "open": "845.00",
-                "high": "855.00",
-                "low": "840.00",
-                "accumulate_trade_volume": "50000",
-                "price_change": "10.00",
-                "price_change_percent": "1.19",
-            },
-        }
+    def test_get_quote_success(self, auth_client, sample_stocks):
+        set_market_data_source(InMemoryMarketData(quotes={"2330": _quote()}))
         response = auth_client.get("/api/v1/stocks/2330/quotes/latest")
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
@@ -217,9 +215,8 @@ class TestStockQuote:
         assert data["volume"] == 50000
         assert Decimal(data["change"]) == Decimal("10.00")
 
-    @patch("app.services.stock_data.twstock.realtime.get")
-    def test_get_quote_source_failure(self, mock_get, auth_client, sample_stocks):
-        mock_get.return_value = {"success": False}
+    def test_get_quote_source_failure(self, auth_client, sample_stocks):
+        set_market_data_source(InMemoryMarketData(quotes={}))
         response = auth_client.get("/api/v1/stocks/2330/quotes/latest")
         assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
 
@@ -423,17 +420,12 @@ class TestStockRecommendation:
 # ─── Sync ─────────────────────────────────────────────────
 
 class TestStockSync:
-    @patch("app.services.stock_data._fetch_historical_yfinance", return_value=[])
-    @patch("app.services.stock_data.TWSEFetcher")
-    def test_sync_success(self, mock_fetcher_class, mock_yf, auth_client, sample_stocks, db_session):
-        from collections import namedtuple
-        Data = namedtuple("Data", ["date", "capacity", "turnover", "open", "high", "low", "close", "change", "transaction"])
-        mock_fetcher = mock_fetcher_class.return_value
-        mock_fetcher.fetch.return_value = {
-            "data": [
-                Data(date=date(2024, 1, 1), capacity=100000, turnover=80000000, open=800.0, high=810.0, low=795.0, close=805.0, change=5.0, transaction=5000),
-            ],
-        }
+    def test_sync_success(self, auth_client, sample_stocks, db_session):
+        set_market_data_source(
+            InMemoryMarketData(
+                history={"2330": [PriceRow(date=date(2024, 1, 1), open=800.0, high=810.0, low=795.0, close=805.0, volume=100000, change=5.0)]}
+            )
+        )
 
         response = auth_client.post(
             "/api/v1/stock-sync-jobs",
@@ -450,14 +442,7 @@ class TestStockSync:
         assert job_response.status_code == status.HTTP_200_OK
         assert job_response.json()["id"] == data["id"]
 
-    @patch("app.services.stock_data._fetch_historical_yfinance", return_value=[])
-    @patch("app.services.stock_data.TWSEFetcher")
-    def test_sync_ignores_duplicate_prices(self, mock_fetcher_class, mock_yf, auth_client, sample_stocks, db_session):
-        from collections import namedtuple
-        Data = namedtuple(
-            "Data",
-            ["date", "capacity", "turnover", "open", "high", "low", "close", "change", "transaction"],
-        )
+    def test_sync_ignores_duplicate_prices(self, auth_client, sample_stocks, db_session):
         stock = db_session.query(Stock).filter(Stock.symbol == "2330").first()
         db_session.add(
             StockPrice(
@@ -472,44 +457,12 @@ class TestStockSync:
         )
         db_session.commit()
 
-        mock_fetcher = mock_fetcher_class.return_value
-        mock_fetcher.fetch.return_value = {
-            "data": [
-                Data(
-                    date=date(2024, 1, 1),
-                    capacity=100000,
-                    turnover=80000000,
-                    open=800.0,
-                    high=810.0,
-                    low=795.0,
-                    close=805.0,
-                    change=5.0,
-                    transaction=5000,
-                ),
-                Data(
-                    date=date(2024, 1, 2),
-                    capacity=120000,
-                    turnover=96000000,
-                    open=805.0,
-                    high=815.0,
-                    low=800.0,
-                    close=810.0,
-                    change=5.0,
-                    transaction=6000,
-                ),
-                Data(
-                    date=date(2024, 1, 2),
-                    capacity=120000,
-                    turnover=96000000,
-                    open=805.0,
-                    high=815.0,
-                    low=800.0,
-                    close=810.0,
-                    change=5.0,
-                    transaction=6000,
-                ),
-            ],
-        }
+        rows = [
+            PriceRow(date=date(2024, 1, 1), open=800.0, high=810.0, low=795.0, close=805.0, volume=100000, change=5.0),
+            PriceRow(date=date(2024, 1, 2), open=805.0, high=815.0, low=800.0, close=810.0, volume=120000, change=5.0),
+            PriceRow(date=date(2024, 1, 2), open=805.0, high=815.0, low=800.0, close=810.0, volume=120000, change=5.0),
+        ]
+        set_market_data_source(InMemoryMarketData(history={"2330": rows}))
 
         response = auth_client.post(
             "/api/v1/stock-sync-jobs",

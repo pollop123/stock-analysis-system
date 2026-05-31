@@ -5,8 +5,9 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies import require_admin
-from app.models import Stock, StockTargetPrice, User
+from app.models import StockTargetPrice, User
 from app.schemas import StockTargetPriceCreate, StockTargetPriceRead
+from app.services.lookups import get_stock_or_404
 
 router = APIRouter(prefix="/stocks", tags=["Target Prices"])
 
@@ -17,12 +18,7 @@ def list_target_prices(
     db: Session = Depends(get_db),
 ):
     """Get analyst target prices for a stock."""
-    stock = db.query(Stock).filter(Stock.symbol == symbol, Stock.is_active == True).first()
-    if not stock:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Stock {symbol} not found",
-        )
+    stock = get_stock_or_404(db, symbol, active_only=True)
 
     targets = (
         db.query(StockTargetPrice)
@@ -41,12 +37,7 @@ def create_target_price(
     current_user: User = Depends(require_admin),
 ):
     """Add a target price for a stock (admin-only)."""
-    stock = db.query(Stock).filter(Stock.symbol == symbol, Stock.is_active == True).first()
-    if not stock:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Stock {symbol} not found",
-        )
+    stock = get_stock_or_404(db, symbol, active_only=True)
 
     target = StockTargetPrice(
         stock_id=stock.id,
@@ -69,12 +60,7 @@ def delete_target_price(
     current_user: User = Depends(require_admin),
 ):
     """Delete a target price (admin-only)."""
-    stock = db.query(Stock).filter(Stock.symbol == symbol, Stock.is_active == True).first()
-    if not stock:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Stock {symbol} not found",
-        )
+    stock = get_stock_or_404(db, symbol, active_only=True)
 
     target = (
         db.query(StockTargetPrice)

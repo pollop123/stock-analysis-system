@@ -1,4 +1,14 @@
 import { useEffect, useRef, useState } from "react";
+import { formatPercent, formatPrice } from "@/lib/format";
+import {
+  score52WeekRange,
+  scoreEps,
+  scoreMargin,
+  scorePe,
+  scoreRoe,
+  scoreRsiMomentum,
+  scoreRevenueGrowth,
+} from "@/lib/signals";
 import type { StockFundamental, StockRecommendation } from "@/types";
 
 interface FinancialHealthScoresProps {
@@ -37,50 +47,44 @@ function AnimatedBar({ value, max = 100, colorClass = "bg-accent" }: { value: nu
 export function FinancialHealthScores({ fundamentals, recommendation, currentPrice }: FinancialHealthScoresProps) {
   if (!fundamentals) return null;
 
-  const pe = fundamentals.pe_ratio ? parseFloat(fundamentals.pe_ratio) : null;
-  const forwardPe = fundamentals.forward_pe ? parseFloat(fundamentals.forward_pe) : null;
-  const revenueGrowth = fundamentals.revenue_growth ? parseFloat(fundamentals.revenue_growth) : null;
-  const profitMargins = fundamentals.profit_margins ? parseFloat(fundamentals.profit_margins) : null;
-  const roe = fundamentals.return_on_equity ? parseFloat(fundamentals.return_on_equity) : null;
-  const high52 = fundamentals.fifty_two_week_high ? parseFloat(fundamentals.fifty_two_week_high) : null;
-  const low52 = fundamentals.fifty_two_week_low ? parseFloat(fundamentals.fifty_two_week_low) : null;
-  const price = currentPrice ? parseFloat(currentPrice) : null;
-
-  const rangeScore = high52 && low52 && price ? ((price - low52) / (high52 - low52)) * 100 : null;
-  const rsi = recommendation?.indicators.rsi14 ? parseFloat(recommendation.indicators.rsi14) : null;
-  const momentumScore = rsi ? Math.max(0, 100 - Math.abs(rsi - 50) * 2) : null;
+  const rangeScore = score52WeekRange(
+    currentPrice,
+    fundamentals.fifty_two_week_low,
+    fundamentals.fifty_two_week_high
+  );
+  const momentumScore = scoreRsiMomentum(recommendation?.indicators.rsi14);
 
   const categories = [
     {
       title: "成長性",
       color: "bg-blue-500",
       metrics: [
-        { label: "營收成長率", value: revenueGrowth, display: revenueGrowth !== null ? `${(revenueGrowth * 100).toFixed(1)}%` : "—", score: revenueGrowth !== null ? Math.min(100, Math.max(0, (revenueGrowth + 0.5) * 100)) : 0 },
-        { label: "EPS", value: fundamentals.eps ? parseFloat(fundamentals.eps) : null, display: fundamentals.eps ?? "—", score: fundamentals.eps ? Math.min(100, Math.max(0, parseFloat(fundamentals.eps) * 20 + 50)) : 0 },
+        { label: "營收成長率", display: formatPercent(fundamentals.revenue_growth, { multiplier: 100, digits: 1 }), score: scoreRevenueGrowth(fundamentals.revenue_growth) },
+        { label: "EPS", display: fundamentals.eps ?? "—", score: scoreEps(fundamentals.eps) },
       ],
     },
     {
       title: "獲利能力",
       color: "bg-emerald-500",
       metrics: [
-        { label: "利潤率", value: profitMargins, display: profitMargins !== null ? `${(profitMargins * 100).toFixed(1)}%` : "—", score: profitMargins !== null ? Math.min(100, profitMargins * 200) : 0 },
-        { label: "ROE", value: roe, display: roe !== null ? `${(roe * 100).toFixed(1)}%` : "—", score: roe !== null ? Math.min(100, roe * 100) : 0 },
+        { label: "利潤率", display: formatPercent(fundamentals.profit_margins, { multiplier: 100, digits: 1 }), score: scoreMargin(fundamentals.profit_margins) },
+        { label: "ROE", display: formatPercent(fundamentals.return_on_equity, { multiplier: 100, digits: 1 }), score: scoreRoe(fundamentals.return_on_equity) },
       ],
     },
     {
       title: "動能",
       color: "bg-purple-500",
       metrics: [
-        { label: "52週位置", value: rangeScore, display: rangeScore !== null ? `${rangeScore.toFixed(1)}%` : "—", score: rangeScore ?? 0 },
-        { label: "RSI動能", value: momentumScore, display: momentumScore !== null ? `${momentumScore.toFixed(0)}` : "—", score: momentumScore ?? 0 },
+        { label: "52週位置", display: formatPercent(rangeScore, { digits: 1 }), score: rangeScore ?? 0 },
+        { label: "RSI動能", display: formatPrice(momentumScore, { digits: 0 }), score: momentumScore ?? 0 },
       ],
     },
     {
       title: "估值",
       color: "bg-amber-500",
       metrics: [
-        { label: "本益比", value: pe, display: fundamentals.pe_ratio ?? "—", score: pe !== null ? Math.max(0, Math.min(100, (50 - pe) * 2 + 50)) : 0 },
-        { label: "Forward P/E", value: forwardPe, display: fundamentals.forward_pe ?? "—", score: forwardPe !== null ? Math.max(0, Math.min(100, (50 - forwardPe) * 2 + 50)) : 0 },
+        { label: "本益比", display: fundamentals.pe_ratio ?? "—", score: scorePe(fundamentals.pe_ratio) },
+        { label: "Forward P/E", display: fundamentals.forward_pe ?? "—", score: scorePe(fundamentals.forward_pe) },
       ],
     },
   ];

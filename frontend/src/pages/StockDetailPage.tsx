@@ -1,27 +1,17 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  getStockQuote,
-  getStockHistory,
-  getStockSyncStatus,
-  getStockRecommendation,
   syncStockPrices,
   exportStockHistoryCSV,
-  getStock,
-  getStockAIAnalysis,
-  getStockProfile,
-  getStockFundamentals,
 } from "@/api/stocks";
 import { createAlert } from "@/api/alerts";
-import { listWatchlists, addWatchlistItem } from "@/api/watchlists";
+import { addWatchlistItem } from "@/api/watchlists";
 import { getApiErrorMessage } from "@/api/client";
-import { useAuthStore } from "@/stores/authStore";
-import { useSSEQuotes } from "@/hooks/useSSEQuotes";
+import { useStockDetail } from "@/hooks/useStockDetail";
 import { useTheme } from "@/hooks/useTheme";
 import { useContentVisibility } from "@/hooks/useContentVisibility";
-import { isActiveAIAnalysisJob } from "@/lib/aiAnalysis";
-import type { StockPrice } from "@/types";
+import { formatPercent } from "@/lib/format";
 import { toast } from "sonner";
 
 import { StockHeader } from "@/components/stock/StockHeader";
@@ -47,11 +37,6 @@ import { Input } from "@/components/ui/Input";
 /* Helpers                                                            */
 /* ------------------------------------------------------------------ */
 
-function aggregatePrices(prices: StockPrice[], resolution: "day" | "week" | "year"): StockPrice[] {
-  if (resolution === "day") return prices;
-  return prices;
-}
-
 function formatDuration(ms: number): string {
   const totalSeconds = Math.floor(ms / 1000);
   const minutes = Math.floor(totalSeconds / 60);
@@ -68,8 +53,6 @@ function formatDuration(ms: number): string {
 export function StockDetailPage() {
   const { symbol } = useParams<{ symbol: string }>();
   const queryClient = useQueryClient();
-  const { user } = useAuthStore();
-  const isAuthenticated = !!user;
   const { theme } = useTheme();
   const { isVisible } = useContentVisibility();
 
@@ -83,70 +66,24 @@ export function StockDetailPage() {
   const syncStartRef = useRef<number | null>(null);
   const [elapsedMs, setElapsedMs] = useState(0);
 
-  /* -- Data queries -- */
-  const { quotes: liveQuotes, connected: sseConnected } = useSSEQuotes(
-    symbol ? [symbol] : []
-  );
-  const liveQuote = symbol ? liveQuotes.get(symbol) : undefined;
-
-  const stockQuery = useQuery({
-    queryKey: ["stock", symbol],
-    queryFn: () => getStock(symbol!),
-    enabled: !!symbol,
-  });
-
-  const profileQuery = useQuery({
-    queryKey: ["stock-profile", symbol],
-    queryFn: () => getStockProfile(symbol!),
-    enabled: !!symbol,
-  });
-
-  const quoteQuery = useQuery({
-    queryKey: ["stock-quote", symbol],
-    queryFn: () => getStockQuote(symbol!),
-    enabled: !!symbol && !liveQuote,
-    refetchInterval: liveQuote ? false : 30000,
-  });
-
-  const historyQuery = useQuery({
-    queryKey: ["stock-history", symbol],
-    queryFn: () => getStockHistory(symbol!),
-    enabled: !!symbol,
-  });
-
-  const syncStatusQuery = useQuery({
-    queryKey: ["stock-sync-status", symbol],
-    queryFn: () => getStockSyncStatus(symbol!),
-    enabled: !!symbol,
-  });
-
-  const watchlistsQuery = useQuery({
-    queryKey: ["watchlists"],
-    queryFn: listWatchlists,
-    enabled: isAuthenticated,
-  });
-
-  const recommendationQuery = useQuery({
-    queryKey: ["stock-recommendation", symbol],
-    queryFn: () => getStockRecommendation(symbol!),
-    enabled: !!symbol,
-  });
-
-  const aiAnalysisQuery = useQuery({
-    queryKey: ["stock-ai-analysis", symbol],
-    queryFn: () => getStockAIAnalysis(symbol!),
-    enabled: !!symbol && isAuthenticated,
-    retry: false,
-    refetchInterval: (query) =>
-      isActiveAIAnalysisJob(query.state.data) ? 5000 : false,
-  });
-
-  const fundamentalsQuery = useQuery({
-    queryKey: ["stock-fundamentals", symbol],
-    queryFn: () => getStockFundamentals(symbol!),
-    enabled: !!symbol,
-    staleTime: 300000,
-  });
+  /* -- Data (composed behind one seam) -- */
+  const detail = useStockDetail(symbol);
+  const {
+    isAuthenticated,
+    sseConnected,
+    stock,
+    profile,
+    quote,
+    isUp,
+    history: historyQuery,
+    chartData,
+    syncStatus,
+    recommendation: rec,
+    fundamentals,
+    aiAnalysis,
+    aiIsLoading,
+    watchlists,
+  } = detail;
 
   /* -- Mutations -- */
   const syncMutation = useMutation({
@@ -222,17 +159,7 @@ export function StockDetailPage() {
   }, [isAuthenticated, historyQuery.data, historyQuery.isLoading, syncMutation]);
 
   /* -- Derived data -- */
-  const quote = liveQuote || quoteQuery.data;
-  const isUp = quote?.change ? parseFloat(quote.change) >= 0 : true;
-  const syncStatus = syncStatusQuery.data;
   const isDark = theme === "dark";
-
-  const chartData = useMemo(() => {
-    if (!historyQuery.data) return [];
-    return aggregatePrices(historyQuery.data, "day");
-  }, [historyQuery.data]);
-
-  const profile = profileQuery.data;
 
   /* -- Handlers -- */
   const handleShare = async () => {
@@ -260,8 +187,6 @@ export function StockDetailPage() {
     }
   };
 
-  const rec = recommendationQuery.data;
-
   /* -- Render -- */
   return (
     <div className="space-y-0">
@@ -270,7 +195,11 @@ export function StockDetailPage() {
         <MetricsStrip
           quote={quote}
           peRatio={profile?.pe_ratio ?? undefined}
-          dividendYield={profile?.dividend_yield ? (parseFloat(profile.dividend_yield) * 100).toFixed(2) + "%" : undefined}
+          dividendYield={
+            profile?.dividend_yield
+              ? formatPercent(profile.dividend_yield, { multiplier: 100 })
+              : undefined
+          }
         />
       )}
 
@@ -283,7 +212,7 @@ export function StockDetailPage() {
             {isVisible("stock_header") && (
               <StockHeader
                 symbol={symbol || ""}
-                stock={stockQuery.data}
+                stock={stock}
                 quote={quote}
                 recommendation={rec || undefined}
                 isUp={isUp}
@@ -297,13 +226,13 @@ export function StockDetailPage() {
             )}
 
             <StockInsightCards
-              stock={stockQuery.data || null}
+              stock={stock || null}
               recommendation={rec || null}
-              fundamentals={fundamentalsQuery.data || null}
+              fundamentals={fundamentals || null}
               quote={quote || null}
               priceHistoryCount={chartData.length}
-              aiAnalysis={aiAnalysisQuery.data ?? null}
-              aiIsLoading={aiAnalysisQuery.isLoading}
+              aiAnalysis={aiAnalysis}
+              aiIsLoading={aiIsLoading}
               isAuthenticated={isAuthenticated}
             />
 
@@ -374,7 +303,7 @@ export function StockDetailPage() {
             {showAddMenu && isAuthenticated && (
               <Card>
                 <CardContent className="p-3">
-                  {watchlistsQuery.data?.length === 0 ? (
+                  {watchlists?.length === 0 ? (
                     <p className="text-xs text-muted-foreground">
                       No watchlists.{" "}
                       <Link to="/watchlists" className="text-accent underline">
@@ -383,7 +312,7 @@ export function StockDetailPage() {
                     </p>
                   ) : (
                     <div className="space-y-1">
-                      {watchlistsQuery.data?.map((wl) => (
+                      {watchlists?.map((wl) => (
                         <button
                           key={wl.id}
                           onClick={() =>

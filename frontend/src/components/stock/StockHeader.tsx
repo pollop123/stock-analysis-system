@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { Share2, Star, MoreHorizontal, ArrowLeft } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { isEtf, recommendationVariant } from "@/lib/signals";
 import type { StockHeaderProps } from "@/types/stock";
 
 export function StockHeader({
@@ -12,12 +13,7 @@ export function StockHeader({
   isUp,
   onShare,
 }: StockHeaderProps) {
-  const recVariant =
-    recommendation?.recommendation === "buy"
-      ? "success"
-      : recommendation?.recommendation === "sell"
-        ? "danger"
-        : "warning";
+  const recVariant = recommendationVariant(recommendation?.recommendation);
 
   const recText: Record<string, string> = {
     buy: "買入",
@@ -25,7 +21,7 @@ export function StockHeader({
     sell: "賣出",
   };
 
-  const isETF = symbol.startsWith("00") || symbol.length >= 5;
+  const isETF = isEtf(symbol, stock);
   const marketLabel =
     stock?.market === "TWSE" ? "上市" : stock?.market === "TPEx" ? "上櫃" : "—";
 

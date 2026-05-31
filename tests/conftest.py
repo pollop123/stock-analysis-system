@@ -46,6 +46,23 @@ def setup_test_db():
         os.remove("test_app.db")
 
 
+@pytest.fixture(scope="function", autouse=True)
+def _reset_market_data_source():
+    """Ensure each test starts/ends with the default market data adapter."""
+    yield
+    from app.services import stock_data
+    stock_data.set_market_data_source(None)
+
+
+@pytest.fixture(scope="function", autouse=True)
+def _clear_ai_analysis_cache():
+    """Keep the process-wide AI analysis cache from leaking across tests."""
+    from app.services.ai_analysis_cache import ai_analysis_cache
+    ai_analysis_cache.clear()
+    yield
+    ai_analysis_cache.clear()
+
+
 @pytest.fixture(scope="function")
 def db_session():
     """Provide a fresh DB session for each test, with rollback."""

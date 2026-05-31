@@ -1,4 +1,5 @@
 import { Star, StarHalf } from "lucide-react";
+import { countSignals, signalLabel } from "@/lib/signals";
 import type { StockRecommendation } from "@/types";
 
 interface SignalSummaryProps {
@@ -26,7 +27,7 @@ export function SignalSummary({ recommendation }: SignalSummaryProps) {
     { label: "KD指標", signal: signals.kd },
   ];
 
-  const buyCount = items.filter((i) => i.signal === "buy").length;
+  const buyCount = countSignals(signals).buy;
   const score = recommendation.composite_score;
   const fullStars = Math.floor(score);
   const hasHalf = score - fullStars >= 0.5;
@@ -60,11 +61,7 @@ export function SignalSummary({ recommendation }: SignalSummaryProps) {
                 item.signal
               )}`}
             >
-              {item.signal === "buy"
-                ? "BUY"
-                : item.signal === "sell"
-                  ? "SELL"
-                  : "HOLD"}
+              {signalLabel(item.signal)}
             </span>
           </div>
         ))}

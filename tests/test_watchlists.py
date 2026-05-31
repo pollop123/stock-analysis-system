@@ -1,8 +1,27 @@
-from unittest.mock import patch
+from datetime import datetime, timezone
+from decimal import Decimal
 
 from fastapi import status
 
+from app.services.market_data import InMemoryMarketData
+from app.services.stock_data import set_market_data_source
 from tests.conftest import login_user, register_user
+
+
+def _quote(symbol, name="台積電"):
+    return {
+        "symbol": symbol,
+        "name": name,
+        "price": Decimal("850.00"),
+        "open": Decimal("845.00"),
+        "high": Decimal("855.00"),
+        "low": Decimal("840.00"),
+        "close": Decimal("850.00"),
+        "volume": 50000,
+        "change": Decimal("10.00"),
+        "change_percent": Decimal("1.19"),
+        "last_updated": datetime.now(timezone.utc),
+    }
 
 # ─── Auth Requirement ─────────────────────────────────────
 
@@ -249,21 +268,8 @@ class TestRemoveWatchlistItem:
 # ─── Quotes ───────────────────────────────────────────────
 
 class TestWatchlistQuotes:
-    @patch("app.services.stock_data.twstock.realtime.get")
-    def test_get_quotes_success(self, mock_get, auth_client, sample_stocks):
-        mock_get.return_value = {
-            "success": True,
-            "info": {"code": "2330", "name": "台積電"},
-            "realtime": {
-                "latest_trade_price": "850.00",
-                "open": "845.00",
-                "high": "855.00",
-                "low": "840.00",
-                "accumulate_trade_volume": "50000",
-                "price_change": "10.00",
-                "price_change_percent": "1.19",
-            },
-        }
+    def test_get_quotes_success(self, auth_client, sample_stocks):
+        set_market_data_source(InMemoryMarketData(quotes={"2330": _quote("2330")}))
 
         create_resp = auth_client.post("/api/v1/watchlists", json={"name": "Tech"})
         wl_id = create_resp.json()["id"]
@@ -277,9 +283,8 @@ class TestWatchlistQuotes:
         assert len(data["quotes"]) == 1
         assert data["quotes"][0]["symbol"] == "2330"
 
-    @patch("app.services.stock_data.twstock.realtime.get")
-    def test_get_quotes_source_failure_ignored(self, mock_get, auth_client, sample_stocks):
-        mock_get.return_value = {"success": False}
+    def test_get_quotes_source_failure_ignored(self, auth_client, sample_stocks):
+        set_market_data_source(InMemoryMarketData(quotes={}))
 
         create_resp = auth_client.post("/api/v1/watchlists", json={"name": "Tech"})
         wl_id = create_resp.json()["id"]
@@ -294,8 +299,8 @@ class TestWatchlistQuotes:
         response = auth_client.get("/api/v1/watchlists/9999/quotes")
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
-    @patch("app.services.stock_data.twstock.realtime.get")
-    def test_get_quotes_empty_watchlist(self, mock_get, auth_client):
+    def test_get_quotes_empty_watchlist(self, auth_client):
+        set_market_data_source(InMemoryMarketData(quotes={}))
         create_resp = auth_client.post("/api/v1/watchlists", json={"name": "Empty"})
         wl_id = create_resp.json()["id"]
 
@@ -304,25 +309,9 @@ class TestWatchlistQuotes:
         data = response.json()
         assert data["quotes"] == []
 
-    @patch("app.services.stock_data.twstock.realtime.get")
-    def test_get_quotes_partial_failure(self, mock_get, auth_client, sample_stocks):
-        # First call succeeds, second fails
-        mock_get.side_effect = [
-            {
-                "success": True,
-                "info": {"code": "2330", "name": "台積電"},
-                "realtime": {
-                    "latest_trade_price": "850.00",
-                    "open": "845.00",
-                    "high": "855.00",
-                    "low": "840.00",
-                    "accumulate_trade_volume": "50000",
-                    "price_change": "10.00",
-                    "price_change_percent": "1.19",
-                },
-            },
-            {"success": False},
-        ]
+    def test_get_quotes_partial_failure(self, auth_client, sample_stocks):
+        # 2330 has a quote; 2317 does not (source returns None) and is skipped.
+        set_market_data_source(InMemoryMarketData(quotes={"2330": _quote("2330")}))
 
         create_resp = auth_client.post("/api/v1/watchlists", json={"name": "Tech"})
         wl_id = create_resp.json()["id"]

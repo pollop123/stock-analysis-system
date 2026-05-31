@@ -33,6 +33,7 @@ from app.services.ai_analysis_jobs import (
     ai_analysis_job_service,
 )
 from app.services.fundamentals import get_stock_fundamentals
+from app.services.lookups import get_stock_or_404
 from app.services.recommendations import get_stock_recommendation
 from app.services.stock_data import async_get_realtime_quote, sync_historical_prices
 from app.services.summaries import get_stock_summaries
@@ -124,13 +125,7 @@ def get_stock(
     db: Session = Depends(get_db),
 ):
     """Get a stock resource."""
-    stock = db.query(Stock).filter(Stock.symbol == symbol, Stock.is_active == True).first()
-    if not stock:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Stock {symbol} not found",
-        )
-    return stock
+    return get_stock_or_404(db, symbol, active_only=True)
 
 
 @router.get("/{symbol}/quotes/latest", response_model=StockQuoteRead)
@@ -139,12 +134,7 @@ async def get_stock_quote(
     db: Session = Depends(get_db),
 ):
     """Get real-time quote for a stock (delayed data from twstock)."""
-    stock = db.query(Stock).filter(Stock.symbol == symbol).first()
-    if not stock:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Stock {symbol} not found",
-        )
+    get_stock_or_404(db, symbol)
 
     quote = await async_get_realtime_quote(symbol)
     if quote is None:
@@ -165,12 +155,7 @@ def get_stock_history(
     db: Session = Depends(get_db),
 ):
     """Get cached historical prices for a stock (JSON or CSV)."""
-    stock = db.query(Stock).filter(Stock.symbol == symbol).first()
-    if not stock:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Stock {symbol} not found",
-        )
+    stock = get_stock_or_404(db, symbol)
 
     query = db.query(StockPrice).filter(StockPrice.stock_id == stock.id)
 
@@ -213,12 +198,7 @@ def get_stock_recommendation_endpoint(
     db: Session = Depends(get_db),
 ):
     """Get a rule-based technical trading signal for a stock."""
-    stock = db.query(Stock).filter(Stock.symbol == symbol, Stock.is_active == True).first()
-    if not stock:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Stock {symbol} not found",
-        )
+    stock = get_stock_or_404(db, symbol, active_only=True)
     return get_stock_recommendation(db, stock)
 
 
@@ -228,12 +208,7 @@ def get_stock_sync_status(
     db: Session = Depends(get_db),
 ):
     """Get historical price sync status for a stock."""
-    stock = db.query(Stock).filter(Stock.symbol == symbol).first()
-    if not stock:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Stock {symbol} not found",
-        )
+    stock = get_stock_or_404(db, symbol)
 
     sync_status = db.query(StockSyncStatus).filter(StockSyncStatus.stock_id == stock.id).first()
     if not sync_status:
@@ -266,12 +241,7 @@ def create_stock_sync_job(
             detail="Start date cannot be after end date",
         )
 
-    stock = db.query(Stock).filter(Stock.symbol == job_in.symbol).first()
-    if not stock:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Stock {job_in.symbol} not found",
-        )
+    stock = get_stock_or_404(db, job_in.symbol)
 
     now = datetime.now(timezone.utc)
     job = StockSyncJob(
@@ -331,12 +301,7 @@ def get_stock_peers(
     db: Session = Depends(get_db),
 ):
     """Get peer stocks in the same industry."""
-    stock = db.query(Stock).filter(Stock.symbol == symbol, Stock.is_active == True).first()
-    if not stock:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Stock {symbol} not found",
-        )
+    stock = get_stock_or_404(db, symbol, active_only=True)
 
     if not stock.industry:
         return []
@@ -361,12 +326,7 @@ def get_stock_fundamentals_endpoint(
     db: Session = Depends(get_db),
 ):
     """Get stock fundamentals (P/E, dividend yield, market cap, etc.) from yfinance."""
-    stock = db.query(Stock).filter(Stock.symbol == symbol, Stock.is_active == True).first()
-    if not stock:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Stock {symbol} not found",
-        )
+    stock = get_stock_or_404(db, symbol, active_only=True)
 
     fundamental = get_stock_fundamentals(db, stock)
     if not fundamental:
@@ -384,12 +344,7 @@ def get_stock_profile(
     db: Session = Depends(get_db),
 ):
     """Get stock profile with fundamentals merged."""
-    stock = db.query(Stock).filter(Stock.symbol == symbol, Stock.is_active == True).first()
-    if not stock:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Stock {symbol} not found",
-        )
+    stock = get_stock_or_404(db, symbol, active_only=True)
 
     fundamental = get_stock_fundamentals(db, stock)
 
@@ -426,12 +381,7 @@ def get_stock_ai_analysis(
     """
     Get AI-generated analysis and summary for a stock using DeepSeek.
     """
-    stock = db.query(Stock).filter(Stock.symbol == symbol, Stock.is_active == True).first()
-    if not stock:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Stock {symbol} not found",
-        )
+    stock = get_stock_or_404(db, symbol, active_only=True)
 
     cached_analysis = ai_analysis_cache.get(stock.symbol)
     if cached_analysis:

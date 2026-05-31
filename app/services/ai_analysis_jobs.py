@@ -11,7 +11,7 @@ from app.database import SessionLocal
 from app.models import AIAnalysisJob, Stock
 from app.schemas import AIAnalysisResponse
 from app.services.ai_analysis_cache import ai_analysis_cache
-from app.services.summaries import generate_deepseek_analysis
+from app.services.ai_provider import AIAnalysisProvider, DeepSeekProvider
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +24,8 @@ class AIAnalysisProviderUnavailable(Exception):
 
 
 class AIAnalysisJobService:
-    def __init__(self):
+    def __init__(self, provider: AIAnalysisProvider | None = None):
+        self._provider = provider or DeepSeekProvider()
         self._lock = threading.Lock()
         self._executor: ThreadPoolExecutor | None = None
         self._capacity = threading.BoundedSemaphore(
@@ -225,7 +226,7 @@ class AIAnalysisJobService:
                 job.started_at = datetime.now(timezone.utc)
                 db.commit()
 
-                result = generate_deepseek_analysis(
+                result = self._provider.analyze(
                     stock_code=stock_code,
                     company_name=company_name,
                     context_data=context_data,

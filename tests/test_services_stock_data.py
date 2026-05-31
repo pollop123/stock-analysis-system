@@ -1,11 +1,11 @@
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
-from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from app.models import Stock, StockSyncStatus
+from app.services.market_data import InMemoryMarketData, PriceRow, SecurityInfo
 from app.services.stock_data import (
     StockSyncResult,
     _get_or_create_sync_status,
@@ -17,6 +17,7 @@ from app.services.stock_data import (
     _to_int,
     async_get_realtime_quote,
     get_realtime_quote,
+    set_market_data_source,
     sync_historical_prices,
     sync_recent_prices_for_active_stocks,
     sync_stock_list,
@@ -138,45 +139,56 @@ class TestGetOrCreateSyncStatus:
 
 
 class TestSyncStockList:
-    def test_adds_new_stocks(self, db_session):
-        mock_info = SimpleNamespace(
-            market="上市",
-            name="測試股",
-            group="測試業",
-            type="股票",
-        )
-        with patch.dict("app.services.stock_data.twstock.codes", {"9999": mock_info}, clear=False):
-            count = sync_stock_list(db_session)
-            assert count >= 1
-            stock = db_session.query(Stock).filter_by(symbol="9999").first()
-            assert stock is not None
-            assert stock.name == "測試股"
-            assert stock.market == "TWSE"
-            assert stock.is_active is True
+    """The service upserts/deactivates from whatever the source lists — no
+    twstock internals to patch, just an in-memory adapter."""
 
-    def test_skips_unsupported_market(self, db_session):
-        mock_info = SimpleNamespace(
-            market="興櫃",
-            name="測試股",
-            group="測試業",
-            type="股票",
+    def test_adds_new_stocks(self, db_session):
+        set_market_data_source(
+            InMemoryMarketData(
+                securities=[SecurityInfo(symbol="9999", name="測試股", market="TWSE", industry="測試業")]
+            )
         )
-        with patch.dict("app.services.stock_data.twstock.codes", {"9998": mock_info}, clear=False):
-            sync_stock_list(db_session)
-            stock = db_session.query(Stock).filter_by(symbol="9998").first()
-            assert stock is None
+        count = sync_stock_list(db_session)
+        assert count >= 1
+        stock = db_session.query(Stock).filter_by(symbol="9999").first()
+        assert stock is not None
+        assert stock.name == "測試股"
+        assert stock.market == "TWSE"
+        assert stock.is_active is True
+
+    def test_updates_changed_stocks(self, db_session):
+        db_session.add(Stock(symbol="9999", name="Old", market="TWSE", industry="X", is_active=True))
+        db_session.commit()
+        set_market_data_source(
+            InMemoryMarketData(
+                securities=[SecurityInfo(symbol="9999", name="New", market="TWSE", industry="Y")]
+            )
+        )
+        sync_stock_list(db_session)
+        stock = db_session.query(Stock).filter_by(symbol="9999").first()
+        assert stock.name == "New"
+        assert stock.industry == "Y"
 
     def test_inactivates_missing_stocks(self, db_session):
         stock = Stock(symbol="ZZZZ", name="Old", market="TWSE", industry="X", is_active=True)
         db_session.add(stock)
         db_session.commit()
 
-        mock_info = SimpleNamespace(market="上市", name="測試股", group="測試業", type="股票")
-        with patch.dict("app.services.stock_data.twstock.codes", {"9999": mock_info}, clear=True):
-            count = sync_stock_list(db_session)
-            db_session.refresh(stock)
-            assert stock.is_active is False
-            assert count >= 1
+        set_market_data_source(
+            InMemoryMarketData(
+                securities=[SecurityInfo(symbol="9999", name="測試股", market="TWSE", industry="測試業")]
+            )
+        )
+        count = sync_stock_list(db_session)
+        db_session.refresh(stock)
+        assert stock.is_active is False
+        assert count >= 1
+
+
+def _price_row(d: date, **overrides) -> PriceRow:
+    base = dict(open=800.0, high=810.0, low=795.0, close=805.0, volume=100000, change=5.0)
+    base.update(overrides)
+    return PriceRow(date=d, **base)
 
 
 class TestSyncHistoricalPrices:
@@ -189,27 +201,29 @@ class TestSyncHistoricalPrices:
             sync_historical_prices(db_session, "9999")
 
     def test_successful_sync(self, db_session, sample_stocks):
-        from collections import namedtuple
-        Data = namedtuple(
-            "Data",
-            ["date", "capacity", "turnover", "open", "high", "low", "close", "change", "transaction"],
+        symbol = sample_stocks[0].symbol
+        set_market_data_source(
+            InMemoryMarketData(history={symbol: [_price_row(date(2024, 1, 5))]}, history_source="twstock")
         )
-        mock_fetcher = MagicMock()
-        mock_fetcher.fetch.return_value = {
-            "data": [
-                Data(date=date(2024, 1, 5), capacity=100000, turnover=80000000, open=800.0, high=810.0, low=795.0, close=805.0, change=5.0, transaction=5000),
-            ],
-        }
+        result = sync_historical_prices(db_session, symbol, start=date(2024, 1, 1), end=date(2024, 1, 31))
+        assert result.records_upserted >= 1
+        assert result.symbol == symbol
 
-        with patch("app.services.stock_data._fetch_historical_yfinance", return_value=[]), patch("app.services.stock_data.TWSEFetcher", return_value=mock_fetcher), patch("app.services.stock_data.time.sleep"):
-            result = sync_historical_prices(db_session, sample_stocks[0].symbol, start=date(2024, 1, 1), end=date(2024, 1, 31))
-            assert result.records_upserted >= 1
-            assert result.symbol == sample_stocks[0].symbol
+    def test_records_data_source_on_status(self, db_session, sample_stocks):
+        symbol = sample_stocks[0].symbol
+        set_market_data_source(
+            InMemoryMarketData(history={symbol: [_price_row(date(2024, 1, 5))]}, history_source="yfinance")
+        )
+        sync_historical_prices(db_session, symbol, start=date(2024, 1, 1), end=date(2024, 1, 31))
+        status = db_session.query(StockSyncStatus).filter_by(stock_id=sample_stocks[0].id).first()
+        assert status.status == "success"
+        assert status.data_source == "yfinance"
 
     def test_failed_sync_updates_status(self, db_session, sample_stocks):
         symbol = sample_stocks[0].symbol
         stock_id = sample_stocks[0].id
-        with patch("app.services.stock_data._fetch_historical_yfinance", return_value=[]), patch("app.services.stock_data.TWSEFetcher", side_effect=Exception("Network error")), pytest.raises(Exception, match="Network error"):
+        set_market_data_source(InMemoryMarketData(history_error=Exception("Network error")))
+        with pytest.raises(Exception, match="Network error"):
             sync_historical_prices(db_session, symbol, start=date(2024, 1, 1), end=date(2024, 1, 31))
 
         status = db_session.query(StockSyncStatus).filter_by(stock_id=stock_id).first()
@@ -217,41 +231,32 @@ class TestSyncHistoricalPrices:
         assert status.status == "failed"
         assert "Network error" in status.last_error
 
-    def test_successful_sync_multiple_months(self, db_session, sample_stocks):
-        from collections import namedtuple
-        Data = namedtuple(
-            "Data",
-            ["date", "capacity", "turnover", "open", "high", "low", "close", "change", "transaction"],
-        )
-        month_data = {
-            (2024, 1): [Data(date=date(2024, 1, 5), capacity=100000, turnover=80000000, open=800.0, high=810.0, low=795.0, close=805.0, change=5.0, transaction=5000)],
-            (2024, 2): [Data(date=date(2024, 2, 8), capacity=120000, turnover=90000000, open=810.0, high=820.0, low=800.0, close=815.0, change=10.0, transaction=6000)],
-            (2024, 3): [Data(date=date(2024, 3, 6), capacity=110000, turnover=85000000, open=815.0, high=825.0, low=805.0, close=820.0, change=5.0, transaction=5500)],
-        }
-
-        mock_fetcher = MagicMock()
-        def fetch(year, month, sid):
-            return {"data": month_data.get((year, month), [])}
-        mock_fetcher.fetch = fetch
-
-        with patch("app.services.stock_data._fetch_historical_yfinance", return_value=[]), patch("app.services.stock_data.TWSEFetcher", return_value=mock_fetcher), patch("app.services.stock_data.time.sleep"):
-            result = sync_historical_prices(db_session, sample_stocks[0].symbol, start=date(2024, 1, 1), end=date(2024, 3, 31))
-            assert result.records_upserted == 3
-            assert result.symbol == sample_stocks[0].symbol
-            assert result.months_requested == 3
-
-    def test_successful_sync_yfinance_fast_path(self, db_session, sample_stocks):
-        from collections import namedtuple
-        Data = namedtuple("Data", ["date", "open", "high", "low", "close", "capacity", "change"])
-        yf_rows = [
-            Data(date=date(2024, 1, 5), open=800.0, high=810.0, low=795.0, close=805.0, capacity=100000, change=5.0),
-            Data(date=date(2024, 1, 8), open=805.0, high=815.0, low=800.0, close=810.0, capacity=120000, change=5.0),
+    def test_successful_sync_multiple_rows(self, db_session, sample_stocks):
+        symbol = sample_stocks[0].symbol
+        rows = [
+            _price_row(date(2024, 1, 5)),
+            _price_row(date(2024, 2, 8), close=815.0),
+            _price_row(date(2024, 3, 6), close=820.0),
         ]
+        set_market_data_source(InMemoryMarketData(history={symbol: rows}))
+        result = sync_historical_prices(db_session, symbol, start=date(2024, 1, 1), end=date(2024, 3, 31))
+        assert result.records_upserted == 3
+        assert result.months_requested == 3
 
-        with patch("app.services.stock_data._fetch_historical_yfinance", return_value=yf_rows):
-            result = sync_historical_prices(db_session, sample_stocks[0].symbol, start=date(2024, 1, 1), end=date(2024, 1, 31))
-            assert result.records_upserted == 2
-            assert result.symbol == sample_stocks[0].symbol
+    def test_skips_duplicate_dates(self, db_session, sample_stocks):
+        symbol = sample_stocks[0].symbol
+        rows = [_price_row(date(2024, 1, 5)), _price_row(date(2024, 1, 5), close=999.0)]
+        set_market_data_source(InMemoryMarketData(history={symbol: rows}))
+        result = sync_historical_prices(db_session, symbol, start=date(2024, 1, 1), end=date(2024, 1, 31))
+        assert result.records_upserted == 1
+        assert result.records_skipped == 1
+
+    def test_skips_rows_outside_range(self, db_session, sample_stocks):
+        symbol = sample_stocks[0].symbol
+        rows = [_price_row(date(2023, 12, 31)), _price_row(date(2024, 1, 5))]
+        set_market_data_source(InMemoryMarketData(history={symbol: rows}))
+        result = sync_historical_prices(db_session, symbol, start=date(2024, 1, 1), end=date(2024, 1, 31))
+        assert result.records_upserted == 1
 
 
 class TestSyncRecentPricesForActiveStocks:
@@ -271,67 +276,17 @@ class TestSyncRecentPricesForActiveStocks:
 
 
 class TestGetRealtimeQuote:
-    def test_success(self):
-        with patch("app.services.stock_data.twstock.realtime.get") as mock_get:
-            mock_get.return_value = {
-                "success": True,
-                "info": {"code": "2330", "name": "台積電"},
-                "realtime": {
-                    "latest_trade_price": "850.00",
-                    "open": "845.00",
-                    "high": "855.00",
-                    "low": "840.00",
-                    "accumulate_trade_volume": "50000",
-                    "price_change": "10.00",
-                    "price_change_percent": "1.19",
-                },
-            }
-            quote = get_realtime_quote("2330")
-            assert quote["symbol"] == "2330"
-            assert quote["name"] == "台積電"
-            assert quote["price"] == Decimal("850.00")
-            assert quote["volume"] == 50000
+    """get_realtime_quote delegates to the source; parsing lives in the adapter
+    (covered by tests/test_market_data.py)."""
 
-    def test_source_failure_returns_none(self):
-        with patch("app.services.stock_data.twstock.realtime.get") as mock_get:
-            mock_get.return_value = {"success": False}
-            assert get_realtime_quote("2330") is None
+    def test_delegates_to_source(self):
+        quote = {"symbol": "2330", "name": "台積電", "price": Decimal("850.00"), "volume": 50000}
+        set_market_data_source(InMemoryMarketData(quotes={"2330": quote}))
+        assert get_realtime_quote("2330") == quote
 
-    def test_calculates_change_percent_when_missing(self):
-        with patch("app.services.stock_data.twstock.realtime.get") as mock_get:
-            mock_get.return_value = {
-                "success": True,
-                "info": {"code": "2330", "name": "台積電"},
-                "realtime": {
-                    "latest_trade_price": "850.00",
-                    "open": "845.00",
-                    "high": "855.00",
-                    "low": "840.00",
-                    "accumulate_trade_volume": "50000",
-                    "price_change": "10.00",
-                    "price_change_percent": "-",
-                },
-            }
-            quote = get_realtime_quote("2330")
-            assert quote["change_percent"] is not None
-
-    def test_missing_required_price_fields_returns_none(self):
-        with patch("app.services.stock_data.twstock.realtime.get") as mock_get:
-            mock_get.return_value = {
-                "success": True,
-                "info": {"code": "006203", "name": "ETF"},
-                "realtime": {
-                    "latest_trade_price": "-",
-                    "open": "-",
-                    "high": "-",
-                    "low": "-",
-                    "accumulate_trade_volume": "0",
-                    "price_change": "-",
-                    "price_change_percent": "-",
-                },
-            }
-            quote = get_realtime_quote("006203")
-            assert quote is None
+    def test_returns_none_when_source_has_no_quote(self):
+        set_market_data_source(InMemoryMarketData(quotes={}))
+        assert get_realtime_quote("2330") is None
 
 
 class TestAsyncWrappers:

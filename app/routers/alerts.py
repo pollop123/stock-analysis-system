@@ -1,12 +1,13 @@
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies import get_current_active_user
-from app.models import PriceAlert, Stock, User
+from app.models import PriceAlert, User
 from app.schemas import PriceAlertCreate, PriceAlertRead, PriceAlertUpdate
+from app.services.lookups import get_owned_or_404, get_stock_or_404
 
 router = APIRouter(prefix="/price-alerts", tags=["Price Alerts"])
 
@@ -32,12 +33,7 @@ def create_alert(
     current_user: User = Depends(get_current_active_user),
 ):
     """Create a new price alert."""
-    stock = db.query(Stock).filter(Stock.symbol == data.symbol).first()
-    if not stock:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Stock {data.symbol} not found",
-        )
+    stock = get_stock_or_404(db, data.symbol)
 
     alert = PriceAlert(
         user_id=current_user.id,
@@ -59,16 +55,7 @@ def update_alert(
     current_user: User = Depends(get_current_active_user),
 ):
     """Update a price alert."""
-    alert = (
-        db.query(PriceAlert)
-        .filter(PriceAlert.id == alert_id, PriceAlert.user_id == current_user.id)
-        .first()
-    )
-    if not alert:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Alert not found",
-        )
+    alert = get_owned_or_404(db, PriceAlert, alert_id, current_user.id, detail="Alert not found")
 
     if data.is_active is not None:
         alert.is_active = data.is_active
@@ -89,16 +76,7 @@ def delete_alert(
     current_user: User = Depends(get_current_active_user),
 ):
     """Delete a price alert."""
-    alert = (
-        db.query(PriceAlert)
-        .filter(PriceAlert.id == alert_id, PriceAlert.user_id == current_user.id)
-        .first()
-    )
-    if not alert:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Alert not found",
-        )
+    alert = get_owned_or_404(db, PriceAlert, alert_id, current_user.id, detail="Alert not found")
 
     db.delete(alert)
     db.commit()

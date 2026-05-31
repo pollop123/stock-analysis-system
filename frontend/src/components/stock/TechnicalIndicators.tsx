@@ -1,6 +1,7 @@
 import { Info } from "lucide-react";
 import { RSIGauge } from "./RSIGauge";
 import { VolumeAnalysisCard } from "./VolumeAnalysisCard";
+import { macdState, maTrend } from "@/lib/signals";
 import type { StockRecommendation } from "@/types";
 import type { VolumeAnalysisProps } from "@/types/stock";
 
@@ -21,15 +22,9 @@ export function TechnicalIndicators({
   const ma20 = indicators.ma20;
   const ma60 = indicators.ma60;
 
-  const maBullish =
-    ma5 && ma20 && ma60
-      ? parseFloat(ma5) > parseFloat(ma20) && parseFloat(ma20) > parseFloat(ma60)
-      : false;
-
-  const maBearish =
-    ma5 && ma20 && ma60
-      ? parseFloat(ma5) < parseFloat(ma20) && parseFloat(ma20) < parseFloat(ma60)
-      : false;
+  const trend = maTrend(ma5, ma20, ma60);
+  const maBullish = trend === "bullish";
+  const maBearish = trend === "bearish";
 
   const maStatus = maBullish ? "偏多" : maBearish ? "偏空" : "震盪";
   const maBadgeClass = maBullish
@@ -46,13 +41,15 @@ export function TechnicalIndicators({
       }
     : null;
 
-  const macdStatus = indicators.macd_histogram
-    ? parseFloat(indicators.macd_histogram) > 0
+  const histogramState = macdState(indicators.macd_histogram);
+  const macdStatus =
+    histogramState === "expanding"
       ? "柱狀體擴張"
-      : parseFloat(indicators.macd_histogram) < 0
+      : histogramState === "contracting"
         ? "柱狀體收斂"
-        : "柱狀體持平"
-    : "計算中";
+        : histogramState === "flat"
+          ? "柱狀體持平"
+          : "計算中";
 
   return (
     <div className="bg-card rounded-2xl border border-border shadow-sm animate-fade-in-up delay-300">
@@ -142,7 +139,7 @@ export function TechnicalIndicators({
                 </span>
                 <span
                   className={`text-sm font-semibold ${
-                    macd && parseFloat(macd.histogram) < 0
+                    macd && histogramState === "contracting"
                       ? "text-danger"
                       : ""
                   }`}
@@ -155,9 +152,9 @@ export function TechnicalIndicators({
               <p className="text-xs text-muted-foreground leading-relaxed flex items-start gap-1">
                 <Info className="w-3 h-3 shrink-0 mt-0.5" />
                 {macd
-                  ? parseFloat(macd.histogram) > 0
+                  ? histogramState === "expanding"
                     ? "柱狀體為正，多頭動能持續。"
-                    : parseFloat(macd.histogram) < 0
+                    : histogramState === "contracting"
                       ? "柱狀體為負，空頭動能增強，留意趨勢轉折。"
                       : "DIF與MACD交錯，動能轉換中。"
                   : "MACD數據計算中，請稍後再試。"}
