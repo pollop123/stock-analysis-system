@@ -34,7 +34,10 @@ def get_stock_fundamentals(db: Session, stock: Stock) -> Optional[StockFundament
 
     # Return cached if updated within 24 hours
     if existing and existing.updated_at:
-        age = datetime.now(timezone.utc) - existing.updated_at
+        updated_at = existing.updated_at
+        if updated_at.tzinfo is None:
+            updated_at = updated_at.replace(tzinfo=timezone.utc)
+        age = datetime.now(timezone.utc) - updated_at
         if age.total_seconds() < 86400:
             return existing
 
@@ -45,7 +48,10 @@ def get_stock_fundamentals(db: Session, stock: Stock) -> Optional[StockFundament
 
     suffix = ".TW" if stock.market == "TWSE" else ".TWO"
     ticker = yf.Ticker(f"{stock.symbol}{suffix}")
-    info = ticker.info or {}
+    try:
+        info = ticker.info or {}
+    except Exception:
+        return existing
 
     if not info:
         return existing

@@ -11,5 +11,5 @@ export function getResolvedAIAnalysis(data?: AIAnalysisResult | null): AIAnalysi
 }
 
 export function isActiveAIAnalysisJob(data?: AIAnalysisResult | null): boolean {
-  return isAIAnalysisJob(data) && ["queued", "running"].includes(data.status);
+  return isAIAnalysisJob(data) && ["pending", "queued", "running"].includes(data.status);
 }

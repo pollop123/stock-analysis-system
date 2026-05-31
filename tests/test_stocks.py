@@ -1,11 +1,13 @@
-from datetime import date, timedelta
+import sys
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
 from fastapi import status
 
-from app.models import Stock, StockPrice, StockSyncJob
+from app.models import Stock, StockFundamental, StockPrice, StockSyncJob
 
 # ─── Public Stock Reads ───────────────────────────────────
 
@@ -41,6 +43,57 @@ class TestStocksPublicReads:
     def test_sync_requires_auth(self, client):
         response = client.post("/api/v1/stock-sync-jobs", json={"symbol": "2330"})
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    def test_fundamentals_uses_cached_sqlite_datetime(self, client, sample_stocks, db_session):
+        stock = sample_stocks[0]
+        db_session.add(
+            StockFundamental(
+                stock_id=stock.id,
+                market_cap=Decimal("59514787201024"),
+                pe_ratio=Decimal("31.18"),
+                dividend_yield=Decimal("0.0104"),
+                return_on_equity=Decimal("0.3621"),
+                updated_at=datetime.now(timezone.utc),
+            )
+        )
+        db_session.commit()
+
+        response = client.get("/api/v1/stocks/2330/fundamentals")
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.json()["pe_ratio"] == "31.18"
+
+    def test_fundamentals_returns_stale_cache_when_refresh_fails(
+        self, client, sample_stocks, db_session, monkeypatch
+    ):
+        class FailingTicker:
+            def __init__(self, _symbol):
+                pass
+
+            @property
+            def info(self):
+                raise RuntimeError("rate limited")
+
+        stock = sample_stocks[0]
+        db_session.add(
+            StockFundamental(
+                stock_id=stock.id,
+                market_cap=Decimal("59514787201024"),
+                pe_ratio=Decimal("31.18"),
+                updated_at=datetime.now(timezone.utc) - timedelta(days=3),
+            )
+        )
+        db_session.commit()
+        monkeypatch.setitem(
+            sys.modules,
+            "yfinance",
+            SimpleNamespace(Ticker=FailingTicker),
+        )
+
+        response = client.get("/api/v1/stocks/2330/fundamentals")
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.json()["market_cap"] == "59514787201024.00"
 
 
 # ─── Search ───────────────────────────────────────────────

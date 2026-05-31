@@ -301,6 +301,7 @@ export function StockDetailPage() {
               recommendation={rec || null}
               fundamentals={fundamentalsQuery.data || null}
               quote={quote || null}
+              priceHistoryCount={chartData.length}
               aiAnalysis={aiAnalysisQuery.data ?? null}
               aiIsLoading={aiAnalysisQuery.isLoading}
               isAuthenticated={isAuthenticated}
