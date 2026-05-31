@@ -280,6 +280,11 @@ export function StockDetailPage() {
               />
             )}
 
+            {/* Price Chart */}
+            {isVisible("price_chart") && (
+              <PriceChart data={chartData} isLoading={historyQuery.isLoading} isDark={isDark} />
+            )}
+
             <StockInsightCards
               stock={stockQuery.data || null}
               recommendation={rec || null}
@@ -325,11 +330,6 @@ export function StockDetailPage() {
                   </div>
                 </CardContent>
               </Card>
-            )}
-
-            {/* Price Chart */}
-            {isVisible("price_chart") && (
-              <PriceChart data={chartData} isLoading={historyQuery.isLoading} isDark={isDark} />
             )}
           </div>
 
