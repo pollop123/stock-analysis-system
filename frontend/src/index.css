@@ -98,12 +98,54 @@ input, select, textarea {
   animation: fadeInUp 0.6s ease-out forwards;
 }
 
+.homepage-hero {
+  background: #f8fafc;
+}
+
+.homepage-hero-content {
+  align-items: flex-start;
+  text-align: left;
+}
+
+.homepage-hero-kicker {
+  color: #1d4ed8;
+}
+
+.homepage-hero-title {
+  color: #0f172a;
+}
+
+.homepage-hero-copy {
+  color: #1e293b;
+}
+
+.homepage-search-box {
+  box-shadow: 0 18px 60px rgba(15, 23, 42, 0.1);
+}
+
+@media (max-width: 767px) {
+  .homepage-hero-content {
+    align-items: center;
+    text-align: center;
+  }
+
+  .homepage-search-box {
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .homepage-example-list {
+    justify-content: center;
+  }
+}
+
 .market-hero-scene {
   position: absolute;
   inset: 0;
   z-index: -20;
   overflow: hidden;
-  background: #05070d;
+  background:
+    linear-gradient(135deg, #dbe6f3 0%, #cfdced 44%, #d7e5e2 100%);
 }
 
 .market-hero-image {
@@ -113,16 +155,27 @@ input, select, textarea {
   height: 100%;
   object-fit: cover;
   object-position: center;
-  filter: saturate(0.95) contrast(1.08) brightness(0.72);
   transform: scale(1.02);
+}
+
+.market-hero-image-light {
+  inset: 0 0 0 38%;
+  width: 62%;
+  filter: saturate(0.78) contrast(0.96) brightness(1.02);
+  opacity: 0.48;
+  object-position: center right;
+}
+
+.market-hero-image-dark {
+  display: none;
 }
 
 .market-hero-vignette {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(circle at 50% 42%, rgba(15, 23, 42, 0.2), rgba(3, 7, 18, 0.72) 52%, rgba(3, 7, 18, 0.94) 100%),
-    linear-gradient(90deg, rgba(3, 7, 18, 0.84) 0%, rgba(3, 7, 18, 0.32) 48%, rgba(3, 7, 18, 0.84) 100%);
+    radial-gradient(circle at 82% 38%, rgba(255, 255, 255, 0), rgba(248, 250, 252, 0.28) 46%, rgba(248, 250, 252, 0.82) 86%),
+    linear-gradient(90deg, rgba(248, 250, 252, 0.98) 0%, rgba(248, 250, 252, 0.9) 38%, rgba(248, 250, 252, 0.5) 72%, rgba(248, 250, 252, 0.18) 100%);
 }
 
 .market-hero-beam {
@@ -131,22 +184,82 @@ input, select, textarea {
   width: min(54vw, 680px);
   height: 240px;
   border-radius: 999px;
-  filter: blur(36px);
-  mix-blend-mode: screen;
-  opacity: 0.4;
+  filter: blur(42px);
+  mix-blend-mode: multiply;
+  opacity: 0.2;
   transform: translateX(-50%) rotate(-8deg);
 }
 
 .market-hero-beam-a {
-  background: linear-gradient(90deg, transparent, rgba(96, 165, 250, 0.55), transparent);
+  background: linear-gradient(90deg, transparent, rgba(37, 99, 235, 0.22), transparent);
   animation: marketBeamFloat 9s ease-in-out infinite;
 }
 
 .market-hero-beam-b {
   bottom: 28%;
   width: min(44vw, 560px);
-  background: linear-gradient(90deg, transparent, rgba(244, 63, 94, 0.34), transparent);
+  background: linear-gradient(90deg, transparent, rgba(15, 118, 110, 0.18), transparent);
   animation: marketBeamFloat 12s ease-in-out infinite reverse;
+}
+
+.dark .market-hero-scene {
+  background: #05070d;
+}
+
+.dark .homepage-hero {
+  background: #05070d;
+}
+
+.dark .homepage-hero-kicker {
+  color: rgba(191, 219, 254, 0.8);
+}
+
+.dark .homepage-hero-title {
+  color: #ffffff;
+}
+
+.dark .homepage-hero-copy {
+  color: rgba(226, 232, 240, 0.9);
+}
+
+.dark .homepage-search-box {
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.42);
+}
+
+.dark .market-hero-image {
+  inset: 0 0 0 38%;
+  width: 62%;
+  transform: scale(1.02);
+}
+
+.dark .market-hero-image-light {
+  display: none;
+}
+
+.dark .market-hero-image-dark {
+  display: block;
+  filter: saturate(0.95) contrast(1.08) brightness(0.72);
+  opacity: 1;
+}
+
+.dark .market-hero-vignette {
+  background:
+    radial-gradient(circle at 82% 38%, rgba(15, 23, 42, 0.04), rgba(3, 7, 18, 0.42) 48%, rgba(3, 7, 18, 0.88) 88%),
+    linear-gradient(90deg, rgba(3, 7, 18, 0.98) 0%, rgba(3, 7, 18, 0.9) 38%, rgba(3, 7, 18, 0.54) 72%, rgba(3, 7, 18, 0.2) 100%);
+}
+
+.dark .market-hero-beam {
+  filter: blur(36px);
+  mix-blend-mode: screen;
+  opacity: 0.4;
+}
+
+.dark .market-hero-beam-a {
+  background: linear-gradient(90deg, transparent, rgba(96, 165, 250, 0.55), transparent);
+}
+
+.dark .market-hero-beam-b {
+  background: linear-gradient(90deg, transparent, rgba(244, 63, 94, 0.34), transparent);
 }
 
 @keyframes marketBeamFloat {
