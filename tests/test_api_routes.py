@@ -47,6 +47,7 @@ def test_rest_api_route_inventory():
         "/api/v1/watchlists/{watchlist_id}": {"GET", "PATCH", "DELETE"},
         "/api/v1/watchlists/{watchlist_id}/items/{symbol}": {"PUT", "DELETE"},
         "/api/v1/watchlists/{watchlist_id}/quotes": {"GET"},
+        "/api/v1/watchlists/{watchlist_id}/analysis": {"GET"},
         "/api/v1/admin/users": {"GET"},
         "/api/v1/admin/users/{user_id}": {"GET", "PATCH", "DELETE"},
         "/api/v1/admin/content-visibility": {"GET"},

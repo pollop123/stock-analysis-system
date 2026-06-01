@@ -8,6 +8,7 @@ from app.dependencies import get_current_active_user
 from app.models import User, Watchlist, WatchlistItem
 from app.schemas import (
     StockQuoteRead,
+    WatchlistAnalysisRead,
     WatchlistCreate,
     WatchlistRead,
     WatchlistUpdate,
@@ -15,6 +16,7 @@ from app.schemas import (
 )
 from app.services.lookups import get_owned_or_404, get_stock_or_404
 from app.services.stock_data import async_get_realtime_quote
+from app.services.watchlist_analysis import analyze_watchlist
 
 router = APIRouter(prefix="/watchlists", tags=["Watchlists"])
 
@@ -225,3 +227,14 @@ async def get_watchlist_quotes(
         name=watchlist.name,
         quotes=quotes,
     )
+
+
+@router.get("/{watchlist_id}/analysis", response_model=WatchlistAnalysisRead)
+def get_watchlist_analysis(
+    watchlist_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Analyze a watchlist as an equal-weight observation basket."""
+    watchlist = _get_watchlist_or_404(db, watchlist_id, current_user.id, with_items=True)
+    return analyze_watchlist(db, watchlist)

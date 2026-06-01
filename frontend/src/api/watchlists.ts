@@ -1,6 +1,7 @@
 import { apiClient } from "./client";
 import type {
   Watchlist,
+  WatchlistAnalysis,
   WatchlistCreate,
   WatchlistWithQuotes,
 } from "@/types";
@@ -43,5 +44,10 @@ export async function removeWatchlistItem(
 
 export async function getWatchlistQuotes(watchlistId: number): Promise<WatchlistWithQuotes> {
   const res = await apiClient.get<WatchlistWithQuotes>(`watchlists/${watchlistId}/quotes`);
+  return res.data;
+}
+
+export async function getWatchlistAnalysis(watchlistId: number): Promise<WatchlistAnalysis> {
+  const res = await apiClient.get<WatchlistAnalysis>(`watchlists/${watchlistId}/analysis`);
   return res.data;
 }

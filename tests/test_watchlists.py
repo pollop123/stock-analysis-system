@@ -54,6 +54,10 @@ class TestWatchlistsAuth:
         response = client.get("/api/v1/watchlists/1/quotes")
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
+    def test_analysis_requires_auth(self, client):
+        response = client.get("/api/v1/watchlists/1/analysis")
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
 
 # ─── Create ───────────────────────────────────────────────
 
@@ -323,6 +327,49 @@ class TestWatchlistQuotes:
         data = response.json()
         assert len(data["quotes"]) == 1
         assert data["quotes"][0]["symbol"] == "2330"
+
+
+class TestWatchlistAnalysis:
+    def test_get_analysis_success(self, auth_client, sample_stocks):
+        sample_stocks[1].is_etf = True
+
+        create_resp = auth_client.post("/api/v1/watchlists", json={"name": "Observation"})
+        wl_id = create_resp.json()["id"]
+        auth_client.put(f"/api/v1/watchlists/{wl_id}/items/2330")
+        auth_client.put(f"/api/v1/watchlists/{wl_id}/items/2317")
+        auth_client.put(f"/api/v1/watchlists/{wl_id}/items/2454")
+
+        response = auth_client.get(f"/api/v1/watchlists/{wl_id}/analysis")
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["id"] == wl_id
+        assert data["name"] == "Observation"
+        assert data["total_stocks"] == 3
+        assert data["equal_weight_assumption"] is True
+        assert data["concentration"]["risk_level"] in {"medium", "high"}
+        assert data["concentration"]["top_industry"]["label"] == "半導體業"
+        assert data["concentration"]["top_industry"]["count"] == 2
+        assert data["signal_distribution"]["hold"] == 3
+        assert data["asset_mix"][0]["count"] == 2
+        assert data["risks"]
+        assert data["recommended_actions"]
+
+    def test_get_analysis_empty_watchlist(self, auth_client):
+        create_resp = auth_client.post("/api/v1/watchlists", json={"name": "Empty"})
+        wl_id = create_resp.json()["id"]
+
+        response = auth_client.get(f"/api/v1/watchlists/{wl_id}/analysis")
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["total_stocks"] == 0
+        assert data["industry_allocation"] == []
+        assert data["concentration"]["diversification_score"] == 0
+
+    def test_get_analysis_not_found(self, auth_client):
+        response = auth_client.get("/api/v1/watchlists/9999/analysis")
+        assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
 class TestLegacyWatchlistRoutes:

@@ -276,6 +276,45 @@ export interface WatchlistWithQuotes {
   quotes: StockQuote[];
 }
 
+export interface WatchlistAllocationBucket {
+  key: string;
+  label: string;
+  count: number;
+  percentage: number;
+}
+
+export interface WatchlistSignalDistribution {
+  buy: number;
+  hold: number;
+  sell: number;
+  unavailable: number;
+}
+
+export interface WatchlistAnalysis {
+  id: number;
+  name: string;
+  total_stocks: number;
+  equal_weight_assumption: boolean;
+  summary: {
+    short_sentence: string;
+    long_sentence: string;
+  };
+  asset_mix: WatchlistAllocationBucket[];
+  industry_allocation: WatchlistAllocationBucket[];
+  market_allocation: WatchlistAllocationBucket[];
+  signal_distribution: WatchlistSignalDistribution;
+  concentration: {
+    top_industry?: WatchlistAllocationBucket | null;
+    top_market?: WatchlistAllocationBucket | null;
+    max_bucket_percentage: number;
+    diversification_score: number;
+    risk_level: "low" | "medium" | "high";
+  };
+  risks: string[];
+  opportunities: string[];
+  recommended_actions: string[];
+}
+
 export interface PortfolioTransaction {
   id: number;
   symbol: string;

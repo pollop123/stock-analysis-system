@@ -332,6 +332,49 @@ class WatchlistRead(WatchlistBase):
     model_config = {"from_attributes": True}
 
 
+class WatchlistAllocationBucket(BaseModel):
+    key: str
+    label: str
+    count: int
+    percentage: float
+
+
+class WatchlistSignalDistribution(BaseModel):
+    buy: int = 0
+    hold: int = 0
+    sell: int = 0
+    unavailable: int = 0
+
+
+class WatchlistConcentrationRead(BaseModel):
+    top_industry: Optional[WatchlistAllocationBucket] = None
+    top_market: Optional[WatchlistAllocationBucket] = None
+    max_bucket_percentage: float = 0
+    diversification_score: int
+    risk_level: Literal["low", "medium", "high"]
+
+
+class WatchlistAnalysisSummary(BaseModel):
+    short_sentence: str
+    long_sentence: str
+
+
+class WatchlistAnalysisRead(BaseModel):
+    id: int
+    name: str
+    total_stocks: int
+    equal_weight_assumption: bool = True
+    summary: WatchlistAnalysisSummary
+    asset_mix: List[WatchlistAllocationBucket] = []
+    industry_allocation: List[WatchlistAllocationBucket] = []
+    market_allocation: List[WatchlistAllocationBucket] = []
+    signal_distribution: WatchlistSignalDistribution
+    concentration: WatchlistConcentrationRead
+    risks: List[str] = []
+    opportunities: List[str] = []
+    recommended_actions: List[str] = []
+
+
 class StockFundamentalRead(BaseModel):
     market_cap: Optional[Decimal] = None
     pe_ratio: Optional[Decimal] = None

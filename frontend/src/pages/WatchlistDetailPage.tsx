@@ -3,6 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient, useQueries } from "@tanstack/react-query";
 import {
   getWatchlist,
+  getWatchlistAnalysis,
   getWatchlistQuotes,
   removeWatchlistItem,
   addWatchlistItem,
@@ -19,10 +20,8 @@ import { toast } from "sonner";
 import {
   ArrowLeft,
   Bot,
-  Brain,
-  CircleDot,
-  FileText,
   Loader2,
+  PieChart,
   Search,
   Sparkles,
   Trash2,
@@ -38,15 +37,27 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 
 const aiActionLabels = {
-  1: "Buy",
-  0: "Hold",
-  [-1]: "Sell",
+  1: "買入",
+  0: "觀望",
+  [-1]: "賣出",
 } as const;
 
 const aiActionBadge = {
   1: "success",
   0: "warning",
   [-1]: "danger",
+} as const;
+
+const riskBadge = {
+  low: "success",
+  medium: "warning",
+  high: "danger",
+} as const;
+
+const riskLabels = {
+  low: "低風險",
+  medium: "中等風險",
+  high: "高風險",
 } as const;
 
 export function WatchlistDetailPage() {
@@ -57,6 +68,7 @@ export function WatchlistDetailPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [showSearch, setShowSearch] = useState(false);
   const [runWatchlistAI, setRunWatchlistAI] = useState(false);
+  const [showAnalysisDetails, setShowAnalysisDetails] = useState(false);
 
   const watchlistQuery = useQuery({
     queryKey: ["watchlist", watchlistId],
@@ -74,6 +86,12 @@ export function WatchlistDetailPage() {
     queryKey: ["watchlist-quotes", watchlistId],
     queryFn: () => getWatchlistQuotes(watchlistId),
     enabled: !!watchlistId && symbols.length > 0 && !sseConnected,
+  });
+
+  const analysisQuery = useQuery({
+    queryKey: ["watchlist-analysis", watchlistId],
+    queryFn: () => getWatchlistAnalysis(watchlistId),
+    enabled: !!watchlistId,
   });
 
   const searchMutation = useQuery({
@@ -99,6 +117,7 @@ export function WatchlistDetailPage() {
       toast.success("Removed from watchlist");
       queryClient.invalidateQueries({ queryKey: ["watchlist", watchlistId] });
       queryClient.invalidateQueries({ queryKey: ["watchlist-quotes", watchlistId] });
+      queryClient.invalidateQueries({ queryKey: ["watchlist-analysis", watchlistId] });
       queryClient.invalidateQueries({ queryKey: ["watchlists"] });
     },
     onError: (err: unknown) => {
@@ -114,6 +133,7 @@ export function WatchlistDetailPage() {
       setShowSearch(false);
       queryClient.invalidateQueries({ queryKey: ["watchlist", watchlistId] });
       queryClient.invalidateQueries({ queryKey: ["watchlist-quotes", watchlistId] });
+      queryClient.invalidateQueries({ queryKey: ["watchlist-analysis", watchlistId] });
       queryClient.invalidateQueries({ queryKey: ["watchlists"] });
     },
     onError: (err: unknown) => {
@@ -122,6 +142,7 @@ export function WatchlistDetailPage() {
   });
 
   const watchlist = watchlistQuery.data;
+  const analysis = analysisQuery.data;
 
   const aiRows = useMemo(() => {
     return symbols.map((stockSymbol, index) => {
@@ -173,7 +194,7 @@ export function WatchlistDetailPage() {
           className="flex items-center gap-1 text-sm text-muted-foreground hover:text-primary transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
-          Back
+          返回
         </Link>
       </div>
 
@@ -189,12 +210,12 @@ export function WatchlistDetailPage() {
             )}
           </div>
           <p className="text-sm text-muted-foreground">
-            {watchlist?.items.length ?? 0} stock{watchlist?.items.length !== 1 ? "s" : ""}
+            {watchlist?.items.length ?? 0} 檔股票
           </p>
         </div>
         <Button onClick={() => setShowSearch(!showSearch)}>
           {showSearch ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-          {showSearch ? "Close" : "Add Stock"}
+          {showSearch ? "關閉" : "新增股票"}
         </Button>
       </div>
 
@@ -204,7 +225,7 @@ export function WatchlistDetailPage() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <input
               type="text"
-              placeholder="Search stock symbol or name..."
+              placeholder="搜尋股票代號或名稱..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-10 pr-4 py-2 rounded-lg border border-border bg-muted focus:outline-none focus:ring-2 focus:ring-accent"
@@ -235,7 +256,7 @@ export function WatchlistDetailPage() {
             </div>
           )}
           {searchQuery.length > 1 && searchMutation.data?.length === 0 && !searchMutation.isLoading && (
-            <p className="text-sm text-muted-foreground text-center py-2">No results found.</p>
+            <p className="text-sm text-muted-foreground text-center py-2">找不到符合的股票。</p>
           )}
         </div>
       )}
@@ -248,65 +269,150 @@ export function WatchlistDetailPage() {
         </div>
       )}
 
-      {watchlist && watchlist.items.length > 0 && (
+      {analysis && watchlist && watchlist.items.length > 0 && (
         <Card>
-          <CardHeader className="flex-row items-center justify-between gap-3">
-            <div>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Bot className="h-4 w-4 text-accent" />
-                Watchlist AI Analysis
-              </CardTitle>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Aggregates AI actions across all stocks in this watchlist.
-              </p>
+          <CardHeader className="pb-3">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <PieChart className="h-4 w-4 text-accent" />
+                  清單分析
+                </CardTitle>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  以等權重觀察，不含真實股數、成本與持股權重。
+                </p>
+              </div>
+              <Badge variant={riskBadge[analysis.concentration.risk_level]}>
+                {riskLabels[analysis.concentration.risk_level]}
+              </Badge>
             </div>
-            <Button
-              onClick={() => {
-                setRunWatchlistAI(true);
-                aiAnalysisQueries.forEach((query) => query.refetch());
-              }}
-              disabled={isAnalyzingWatchlist}
-            >
-              {isAnalyzingWatchlist ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Sparkles className="h-4 w-4" />
-              )}
-              Analyze Watchlist
-            </Button>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+            <div className="grid grid-cols-3 gap-2">
               <div className="rounded-lg border border-border bg-muted p-3">
-                <p className="text-xs text-muted-foreground">Buy</p>
-                <p className="text-xl font-semibold text-success">{aiSummary.buy}</p>
+                <p className="text-xs text-muted-foreground">分散分數</p>
+                <p className="text-xl font-semibold text-primary">
+                  {analysis.concentration.diversification_score}
+                </p>
               </div>
               <div className="rounded-lg border border-border bg-muted p-3">
-                <p className="text-xs text-muted-foreground">Hold</p>
-                <p className="text-xl font-semibold text-amber-500">{aiSummary.hold}</p>
+                <p className="text-xs text-muted-foreground">最大產業</p>
+                <p className="text-xl font-semibold text-primary">
+                  {analysis.concentration.top_industry?.percentage ?? 0}%
+                </p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {analysis.concentration.top_industry?.label ?? "未分類"}
+                </p>
               </div>
               <div className="rounded-lg border border-border bg-muted p-3">
-                <p className="text-xs text-muted-foreground">Sell</p>
-                <p className="text-xl font-semibold text-danger">{aiSummary.sell}</p>
-              </div>
-              <div className="rounded-lg border border-border bg-muted p-3">
-                <p className="text-xs text-muted-foreground">Pending</p>
-                <p className="text-xl font-semibold text-primary">{aiSummary.pending}</p>
-              </div>
-              <div className="rounded-lg border border-border bg-muted p-3">
-                <p className="text-xs text-muted-foreground">Failed</p>
-                <p className="text-xl font-semibold text-primary">{aiSummary.failed}</p>
+                <p className="text-xs text-muted-foreground">技術訊號</p>
+                <p className="text-sm font-semibold text-primary">
+                  買 {analysis.signal_distribution.buy} / 觀望 {analysis.signal_distribution.hold} / 賣{" "}
+                  {analysis.signal_distribution.sell}
+                </p>
               </div>
             </div>
 
-            {!runWatchlistAI && (
-              <div className="rounded-lg border border-border bg-muted p-3 text-sm text-muted-foreground">
-                Run analysis to generate AI summaries for each stock in this watchlist.
+            <div className="rounded-lg border border-border p-3">
+              <p className="text-sm font-medium text-primary">
+                {analysis.concentration.top_industry?.label ?? "未分類"}佔{" "}
+                {analysis.concentration.top_industry?.percentage ?? 0}%，
+                清單目前屬於{riskLabels[analysis.concentration.risk_level]}觀察。
+              </p>
+              <div className="mt-3 grid gap-3 md:grid-cols-2">
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground">主要提醒</p>
+                  <p className="mt-1 text-sm leading-5 text-muted-foreground">
+                    {analysis.risks[0] ?? "目前沒有明顯的集中風險。"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground">下一步</p>
+                  <p className="mt-1 text-sm leading-5 text-muted-foreground">
+                    {analysis.recommended_actions[0] ?? "新增股票時持續留意產業分散度。"}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {showAnalysisDetails && (
+              <div className="grid gap-4 border-t border-border pt-4 md:grid-cols-2">
+                <div>
+                  <p className="mb-2 text-xs font-semibold text-muted-foreground">產業分布</p>
+                  <div className="space-y-2">
+                    {analysis.industry_allocation.slice(0, 4).map((bucket) => (
+                      <div key={bucket.key}>
+                        <div className="mb-1 flex justify-between gap-2 text-xs">
+                          <span className="truncate text-primary">{bucket.label}</span>
+                          <span className="text-muted-foreground">{bucket.percentage}%</span>
+                        </div>
+                        <div className="h-2 overflow-hidden rounded-full bg-muted">
+                          <div
+                            className="h-full rounded-full bg-accent"
+                            style={{ width: `${bucket.percentage}%` }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <p className="mb-2 text-xs font-semibold text-muted-foreground">資產類型</p>
+                  <div className="space-y-2">
+                    {analysis.asset_mix.map((bucket) => (
+                      <div
+                        key={bucket.key}
+                        className="flex items-center justify-between rounded-lg border border-border p-2 text-sm"
+                      >
+                        <span className="text-primary">
+                          {bucket.key === "etf" ? "ETF" : "個股"}
+                        </span>
+                        <span className="text-muted-foreground">
+                          {bucket.count} 檔 ({bucket.percentage}%)
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
             )}
 
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Bot className="h-4 w-4 text-accent" />
+                <span>
+                  個股 AI：買 {aiSummary.buy} / 觀望 {aiSummary.hold} / 賣 {aiSummary.sell}
+                </span>
+                {(aiSummary.pending > 0 || aiSummary.failed > 0) && (
+                  <span>
+                    / 處理中 {aiSummary.pending} / 失敗 {aiSummary.failed}
+                  </span>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => setShowAnalysisDetails((value) => !value)}>
+                  {showAnalysisDetails ? "收合細節" : "顯示細節"}
+                </Button>
+                <Button
+                  onClick={() => {
+                    setRunWatchlistAI(true);
+                    aiAnalysisQueries.forEach((query) => query.refetch());
+                  }}
+                  disabled={isAnalyzingWatchlist}
+                >
+                  {isAnalyzingWatchlist ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-4 w-4" />
+                  )}
+                  分析個股
+                </Button>
+              </div>
+            </div>
+
             {runWatchlistAI && (
-              <div className="space-y-3">
+              <div className="space-y-2 border-t border-border pt-4">
                 {aiRows.map((row) => {
                   const action = row.analysis?.action;
                   return (
@@ -324,50 +430,26 @@ export function WatchlistDetailPage() {
                         {row.isLoading ? (
                           <Badge variant="secondary" className="gap-1">
                             <Loader2 className="h-3 w-3 animate-spin" />
-                            Running
+                            分析中
                           </Badge>
                         ) : action !== undefined ? (
                           <Badge variant={aiActionBadge[action]}>
                             {aiActionLabels[action]}
                           </Badge>
                         ) : row.error ? (
-                          <Badge variant="danger">Failed</Badge>
+                          <Badge variant="danger">失敗</Badge>
                         ) : (
-                          <Badge variant="secondary">Queued</Badge>
+                          <Badge variant="secondary">等待中</Badge>
                         )}
                       </div>
 
                       {row.analysis ? (
-                        <div className="mt-3 space-y-3">
-                          <div>
-                            <p className="text-sm font-medium text-primary">
-                              {row.analysis.summary.short_sentence}
-                            </p>
-                            <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                              {row.analysis.summary.long_sentence}
-                            </p>
-                          </div>
-                          <div className="grid gap-2 md:grid-cols-3">
-                            <p className="flex gap-2 text-xs leading-5 text-muted-foreground">
-                              <CircleDot className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent" />
-                              {row.analysis.reasons.technical}
-                            </p>
-                            <p className="flex gap-2 text-xs leading-5 text-muted-foreground">
-                              <FileText className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent" />
-                              {row.analysis.reasons.fundamental}
-                            </p>
-                            <p className="flex gap-2 text-xs leading-5 text-muted-foreground">
-                              <Brain className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent" />
-                              {row.analysis.reasons.comprehensive}
-                            </p>
-                          </div>
-                          <p className="truncate text-xs text-muted-foreground">
-                            Request ID: <span className="font-mono">{row.analysis.request_id}</span>
-                          </p>
-                        </div>
+                        <p className="mt-2 text-sm leading-5 text-muted-foreground">
+                          {row.analysis.summary.short_sentence}
+                        </p>
                       ) : row.error ? (
                         <p className="mt-2 text-sm text-danger">
-                          {getApiErrorMessage(row.error, "AI analysis failed")}
+                          {getApiErrorMessage(row.error, "AI 分析失敗")}
                         </p>
                       ) : null}
                     </div>
@@ -381,12 +463,12 @@ export function WatchlistDetailPage() {
 
       {!watchlistQuery.isLoading && watchlist && watchlist.items.length === 0 && (
         <div className="text-center py-12 text-muted-foreground">
-          <p>This watchlist is empty.</p>
+          <p>這份觀察清單目前沒有股票。</p>
           <button
             onClick={() => setShowSearch(true)}
             className="mt-2 text-accent text-sm font-medium hover:underline"
           >
-            Add your first stock
+            新增第一檔股票
           </button>
         </div>
       )}
@@ -397,12 +479,12 @@ export function WatchlistDetailPage() {
             <table className="w-full text-sm">
               <thead className="bg-muted">
                 <tr>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Symbol</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Name</th>
-                  <th className="text-right px-4 py-3 font-medium text-muted-foreground">Price</th>
-                  <th className="text-right px-4 py-3 font-medium text-muted-foreground">Change</th>
-                  <th className="text-right px-4 py-3 font-medium text-muted-foreground">Volume</th>
-                  <th className="text-right px-4 py-3 font-medium text-muted-foreground">Range</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">代號</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">名稱</th>
+                  <th className="text-right px-4 py-3 font-medium text-muted-foreground">價格</th>
+                  <th className="text-right px-4 py-3 font-medium text-muted-foreground">漲跌</th>
+                  <th className="text-right px-4 py-3 font-medium text-muted-foreground">成交量</th>
+                  <th className="text-right px-4 py-3 font-medium text-muted-foreground">區間</th>
                   <th className="px-4 py-3"></th>
                 </tr>
               </thead>
@@ -460,7 +542,7 @@ export function WatchlistDetailPage() {
           {quotesQuery.isFetching && !sseConnected && (
             <div className="px-4 py-2 text-xs text-muted-foreground bg-muted/50 flex items-center gap-2">
               <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-accent" />
-              Refreshing quotes...
+              更新報價中...
             </div>
           )}
         </div>
