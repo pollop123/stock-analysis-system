@@ -23,8 +23,7 @@ export function DashboardPage() {
   };
 
   const searchExample = (symbol: string) => {
-    const params = new URLSearchParams({ q: symbol });
-    navigate(`/stocks?${params.toString()}`);
+    navigate(`/stocks/${symbol}`);
   };
 
   return (
