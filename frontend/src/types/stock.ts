@@ -7,6 +7,7 @@ export interface StockHeaderProps {
   recommendation?: StockRecommendation | null;
   isUp: boolean;
   onShare?: () => void;
+  onWatchlist?: () => void;
 }
 
 export interface MetricsStripProps {

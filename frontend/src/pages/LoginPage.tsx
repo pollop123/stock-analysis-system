@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/stores/authStore";
 import { login } from "@/api/auth";
 import { getMe } from "@/api/auth";
@@ -9,6 +9,7 @@ import { TrendingUp, Eye, EyeOff } from "lucide-react";
 
 export function LoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { setAuth } = useAuthStore();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -24,7 +25,8 @@ export function LoginPage() {
       const user = await getMe();
       setAuth(user, tokens);
       toast.success("Welcome back!");
-      navigate("/");
+      const from = (location.state as { from?: string } | null)?.from || "/";
+      navigate(from, { replace: true });
     } catch (err: unknown) {
       toast.error(getApiErrorMessage(err, "Login failed"));
     } finally {

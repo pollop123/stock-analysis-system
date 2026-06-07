@@ -4,7 +4,7 @@ from typing import Sequence
 
 from sqlalchemy.orm import Session
 
-from app.models import Stock, StockPrice
+from app.models import Stock, StockFundamental, StockPrice
 from app.schemas import (
     IndicatorSignal,
     RecommendationIndicators,
@@ -14,7 +14,7 @@ from app.schemas import (
 )
 
 DISCLAIMER = (
-    "This is a technical signal generated from historical price data and is not financial advice."
+    "This signal is generated from historical price data and available fundamentals, and is not financial advice."
 )
 
 
@@ -172,8 +172,82 @@ def _support_resistance(prices: Sequence[StockPrice]) -> tuple[Decimal | None, D
     return r2, r1, s1, s2
 
 
-def build_stock_recommendation(symbol: str, prices: Sequence[StockPrice]) -> StockRecommendationRead:
+def _metric_score(value: Decimal | None, positive_threshold: Decimal, negative_threshold: Decimal, *, lower_is_better: bool = False) -> tuple[int, bool]:
+    if value is None:
+        return 0, False
+    if lower_is_better:
+        if Decimal("0") < value <= positive_threshold:
+            return 1, True
+        if value >= negative_threshold:
+            return -1, True
+        return 0, True
+    if value >= positive_threshold:
+        return 1, True
+    if value <= negative_threshold:
+        return -1, True
+    return 0, True
+
+
+def _fundamental_score(fundamental: StockFundamental | None, *, is_etf: bool = False) -> tuple[int | None, int, list[str]]:
+    if is_etf:
+        return None, 100, ["ETF is excluded from company fundamental scoring"]
+    if fundamental is None:
+        return None, 0, ["Fundamental data is not available"]
+
+    score = 0
+    available = 0
+    reasons: list[str] = []
+
+    metric_score, has_metric = _metric_score(fundamental.revenue_growth, Decimal("0.05"), Decimal("0"))
+    if has_metric:
+        available += 1
+        score += metric_score
+        if metric_score > 0:
+            reasons.append("Revenue growth supports the signal")
+        elif metric_score < 0:
+            reasons.append("Revenue growth is weak")
+
+    metric_score, has_metric = _metric_score(fundamental.profit_margins, Decimal("0.10"), Decimal("0"))
+    if has_metric:
+        available += 1
+        score += metric_score
+        if metric_score > 0:
+            reasons.append("Profit margins indicate healthy profitability")
+        elif metric_score < 0:
+            reasons.append("Profit margins are weak")
+
+    metric_score, has_metric = _metric_score(fundamental.return_on_equity, Decimal("0.10"), Decimal("0.03"))
+    if has_metric:
+        available += 1
+        score += metric_score
+        if metric_score > 0:
+            reasons.append("ROE indicates efficient capital use")
+        elif metric_score < 0:
+            reasons.append("ROE is low")
+
+    metric_score, has_metric = _metric_score(fundamental.pe_ratio, Decimal("25"), Decimal("40"), lower_is_better=True)
+    if has_metric:
+        available += 1
+        score += metric_score
+        if metric_score > 0:
+            reasons.append("Valuation is not stretched by P/E")
+        elif metric_score < 0:
+            reasons.append("P/E valuation is elevated")
+
+    if available == 0:
+        return None, 0, ["Fundamental data is incomplete"]
+
+    coverage = int(available / 4 * 100)
+    return max(-4, min(4, score)), coverage, reasons
+
+
+def build_stock_recommendation(symbol: str, prices: Sequence[StockPrice], stock: Stock | None = None) -> StockRecommendationRead:
     ordered_prices = sorted(prices, key=lambda price: price.date)
+    is_etf = bool(stock and stock.is_etf)
+    fundamental_score, fundamental_coverage, fundamental_reasons = _fundamental_score(
+        stock.fundamental if stock else None,
+        is_etf=is_etf,
+    )
     if not ordered_prices:
         return StockRecommendationRead(
             symbol=symbol,
@@ -183,6 +257,8 @@ def build_stock_recommendation(symbol: str, prices: Sequence[StockPrice]) -> Sto
             indicators=RecommendationIndicators(close=Decimal("0.00")),
             reasons=["Not enough historical price data"],
             disclaimer=DISCLAIMER,
+            fundamental_score=fundamental_score,
+            data_quality_score=fundamental_coverage,
         )
 
     closes = [Decimal(price.close_price) for price in ordered_prices]
@@ -232,6 +308,8 @@ def build_stock_recommendation(symbol: str, prices: Sequence[StockPrice]) -> Sto
             indicators=indicators,
             reasons=["Not enough historical price data"],
             disclaimer=DISCLAIMER,
+            fundamental_score=fundamental_score,
+            data_quality_score=min(40, fundamental_coverage),
         )
 
     score = 0
@@ -313,19 +391,39 @@ def build_stock_recommendation(symbol: str, prices: Sequence[StockPrice]) -> Sto
         else:
             reasons.append("Price is within Bollinger Bands, trending normally")
 
-    if score >= 3:
+    technical_score = score
+    final_score = technical_score + (fundamental_score or 0)
+
+    if technical_score >= 3 and fundamental_score is not None and fundamental_score <= -2:
+        reasons.append("Technical momentum is positive, but weak fundamentals cap the signal at hold")
+        recommendation = "hold"
+    elif technical_score <= -2 and fundamental_score is not None and fundamental_score >= 2:
+        reasons.append("Fundamentals are healthy, but technical weakness keeps the signal at hold")
+        recommendation = "hold"
+    elif final_score >= 3:
         recommendation = "buy"
-    elif score <= -2:
+    elif final_score <= -2:
         recommendation = "sell"
     else:
         recommendation = "hold"
 
-    confidence = 40 + min(abs(score), 5) * 10
+    if fundamental_score is None:
+        reasons.extend(fundamental_reasons)
+    else:
+        reasons.extend(fundamental_reasons[:2])
+
+    confidence = 40 + min(abs(final_score), 5) * 10
     if len(ordered_prices) < 60:
         confidence -= 10
+    if fundamental_score is None and not is_etf:
+        confidence -= 10
+    elif fundamental_coverage < 75 and not is_etf:
+        confidence -= 5
     confidence = max(20, min(confidence, 90))
 
     composite_score = max(1, min(5, round(confidence / 20)))
+    price_quality = 100 if len(ordered_prices) >= 60 else 65
+    data_quality_score = int(price_quality * Decimal("0.7") + Decimal(fundamental_coverage) * Decimal("0.3"))
 
     # Per-indicator signals
     ma_signal: str = "buy" if ma5 and ma20 and ma5 > ma20 else "sell" if ma5 and ma20 and ma5 < ma20 else "hold"
@@ -363,6 +461,9 @@ def build_stock_recommendation(symbol: str, prices: Sequence[StockPrice]) -> Sto
             kd=kd_signal,
         ),
         composite_score=composite_score,
+        technical_score=technical_score,
+        fundamental_score=fundamental_score,
+        data_quality_score=data_quality_score,
         risk_metrics=RiskMetrics(
             risk_level=risk_level,
             volatility_risk=volatility_risk,
@@ -390,4 +491,4 @@ def get_stock_recommendation(db: Session, stock: Stock) -> StockRecommendationRe
         .limit(120)
         .all()
     )
-    return build_stock_recommendation(stock.symbol, prices)
+    return build_stock_recommendation(stock.symbol, prices, stock)

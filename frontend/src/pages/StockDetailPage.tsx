@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useNavigate, useParams, Link } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   syncStockPrices,
@@ -52,6 +52,7 @@ function formatDuration(ms: number): string {
 
 export function StockDetailPage() {
   const { symbol } = useParams<{ symbol: string }>();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { theme } = useTheme();
   const { isVisible } = useContentVisibility();
@@ -116,6 +117,7 @@ export function StockDetailPage() {
       toast.success("Price alert created");
       setShowAlertForm(false);
       setAlertPrice("");
+      queryClient.invalidateQueries({ queryKey: ["alerts"] });
     },
     onError: (err: unknown) => {
       toast.error(getApiErrorMessage(err, "Failed to create alert"));
@@ -129,6 +131,7 @@ export function StockDetailPage() {
       toast.success("Added to watchlist");
       setShowAddMenu(false);
       queryClient.invalidateQueries({ queryKey: ["watchlists"] });
+      queryClient.invalidateQueries({ queryKey: ["watchlist"] });
     },
     onError: (err: unknown) => {
       toast.error(getApiErrorMessage(err, "Failed to add to watchlist"));
@@ -162,6 +165,33 @@ export function StockDetailPage() {
   const isDark = theme === "dark";
 
   /* -- Handlers -- */
+  const requireAuth = (action: string) => {
+    if (isAuthenticated) return true;
+    toast(`${action}可在登入後使用`, {
+      description: "登入後會回到這檔股票，並保存你的設定。",
+      action: {
+        label: "登入",
+        onClick: () => navigate("/login", { state: { from: `/stocks/${symbol}` } }),
+      },
+    });
+    return false;
+  };
+
+  const handleBuySell = (type: "buy" | "sell") => {
+    if (!requireAuth(type === "buy" ? "記錄買入" : "記錄賣出")) return;
+    setBuySellModal({ type });
+  };
+
+  const handleAlertClick = () => {
+    if (!requireAuth("設定提醒")) return;
+    setShowAlertForm((value) => !value);
+  };
+
+  const handleWatchlistClick = () => {
+    if (!requireAuth("加入自選清單")) return;
+    setShowAddMenu((value) => !value);
+  };
+
   const handleShare = async () => {
     const url = window.location.href;
     if (navigator.share) {
@@ -217,6 +247,7 @@ export function StockDetailPage() {
                 recommendation={rec || undefined}
                 isUp={isUp}
                 onShare={handleShare}
+                onWatchlist={handleWatchlistClick}
               />
             )}
 
@@ -282,10 +313,10 @@ export function StockDetailPage() {
             {/* Quick Actions */}
             {isVisible("quick_actions") && (
               <QuickActions
-                onBuy={() => setBuySellModal({ type: "buy" })}
-                onSell={() => setBuySellModal({ type: "sell" })}
-                onAlert={() => setShowAlertForm(!showAlertForm)}
-                onWatchlist={() => setShowAddMenu(!showAddMenu)}
+                onBuy={() => handleBuySell("buy")}
+                onSell={() => handleBuySell("sell")}
+                onAlert={handleAlertClick}
+                onWatchlist={handleWatchlistClick}
               />
             )}
 

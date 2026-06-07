@@ -232,6 +232,9 @@ class StockRecommendationRead(BaseModel):
     disclaimer: str
     indicator_signals: IndicatorSignal = IndicatorSignal()
     composite_score: int = Field(3, ge=1, le=5)
+    technical_score: int = 0
+    fundamental_score: Optional[int] = None
+    data_quality_score: int = Field(0, ge=0, le=100)
     risk_metrics: RiskMetrics = RiskMetrics()
     support_resistance: SupportResistanceLevels = SupportResistanceLevels()
 

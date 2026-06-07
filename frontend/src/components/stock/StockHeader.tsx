@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Share2, Star, MoreHorizontal, ArrowLeft } from "lucide-react";
+import { Share2, Star, ArrowLeft } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { isEtf, recommendationVariant } from "@/lib/signals";
@@ -12,6 +12,7 @@ export function StockHeader({
   recommendation,
   isUp,
   onShare,
+  onWatchlist,
 }: StockHeaderProps) {
   const recVariant = recommendationVariant(recommendation?.recommendation);
 
@@ -126,6 +127,7 @@ export function StockHeader({
               size="icon"
               className="rounded-xl"
               title="加入觀察清單"
+              onClick={onWatchlist}
             >
               <Star className="w-5 h-5 text-muted-foreground" />
             </Button>
@@ -137,14 +139,6 @@ export function StockHeader({
               onClick={onShare}
             >
               <Share2 className="w-5 h-5 text-muted-foreground" />
-            </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              className="rounded-xl"
-              title="更多選項"
-            >
-              <MoreHorizontal className="w-5 h-5 text-muted-foreground" />
             </Button>
           </div>
         </div>

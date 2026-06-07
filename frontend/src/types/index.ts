@@ -185,6 +185,9 @@ export interface StockRecommendation {
   disclaimer: string;
   indicator_signals: IndicatorSignals;
   composite_score: number;
+  technical_score?: number;
+  fundamental_score?: number | null;
+  data_quality_score?: number;
   risk_metrics: RiskMetrics;
   support_resistance: SupportResistanceLevels;
 }
